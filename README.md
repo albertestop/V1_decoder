@@ -73,6 +73,7 @@ Custom config path:
 python scripts/run_image_vae_single.py --config scripts/configs/image_vae_single.toml
 python scripts/run_image_vae_batch.py --config scripts/configs/image_vae_batch.toml
 python scripts/run_neural_ae_experiment.py --config scripts/configs/neural_ae_experiment.toml
+python scripts/generate_synthetic_neural_dataset.py --config scripts/configs/synthetic_neural_dataset.toml
 ```
 
 ## Neural trace data format
@@ -95,6 +96,14 @@ proc_session session mode is also supported:
 - The loader reads `<proc_session_root>/<session>/data/responses/*.npy` (configurable subdir/pattern).
 - Each response file is expected as `[n_neurons, length]` and is transposed to `[length, n_neurons]` for model input.
 - With multiple sessions, use `data.channel_mode = "truncate_min"` and/or `data.time_mode = "truncate_min"` if shapes differ.
+
+Synthetic factor dataset mode:
+
+- Run `python scripts/generate_synthetic_neural_dataset.py`.
+- This generates an `.npy` dataset with shape `[N, T, C]` (default `336 x 300 x 5443`) using `K` latent factors.
+- To train on it, set in `scripts/configs/neural_ae_experiment.toml`:
+  - `data.source = "array"`
+  - `data.path = "data/neural/synthetic_factors_336x300x5443.npy"` (or your chosen output path)
 
 ## Notes
 

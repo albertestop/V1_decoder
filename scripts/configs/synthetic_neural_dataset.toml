@@ -1,0 +1,15 @@
+[run]
+output_path = "data/neural/synthetic_factors_336x300x5443.npy"
+
+[synthetic]
+# Target output shape: [N, T, C]
+n_samples = 336
+sequence_length = 300
+n_neurons = 5443
+
+# K latent factors driving all neuron traces
+n_factors = 16
+factor_scale = 1.0
+noise_std = 0.05
+baseline_std = 0.0
+seed = 0

@@ -19,6 +19,7 @@ time_mode = "error"
 
 # Used by source = "array"
 # path = "data/neural/example_traces.npy"
+# path = "data/neural/synthetic_factors_336x300x5443.npy"
 # npz_key = "traces"
 
 batch_size = 8
