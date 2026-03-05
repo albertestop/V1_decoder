@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+.env
+
+# local artifacts
+data/
+outputs/
+
+# model/cache artifacts
+*.pt
+*.pth
+*.ckpt
+*.safetensors

@@ -1,0 +1,7 @@
+[run]
+frames_root = "data/video_frames"
+num_samples = 100
+output_dir = "outputs/image_compression/batch"
+seed = 0
+height = 144
+width = 256

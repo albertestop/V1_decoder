@@ -1,0 +1,6 @@
+[run]
+image_path = "assets/samples/img_orig.jpg"
+output_dir = "outputs/image_compression/single"
+height = 144
+width = 256
+prefix = "sample"

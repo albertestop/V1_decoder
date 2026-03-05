@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "v1-to-video"
+version = "0.1.0"
+description = "Video reconstruction from V1 neural activity via latent-space autoencoding"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "diffusers>=0.30.0",
+  "matplotlib>=3.8.0",
+  "numpy>=1.26.0",
+  "Pillow>=10.0.0",
+  "scikit-image>=0.22.0",
+  "tomli>=2.0.1; python_version < '3.11'",
+  "torch>=2.2.0",
+  "torchvision>=0.17.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
