@@ -13,6 +13,7 @@ SRC_DIR = REPO_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
+from v1tovideo.config_utils import load_toml, resolve_maybe_repo_path, resolve_repo_path
 from v1tovideo.neural_autoencoder import (
     ModelSpec,
     NeuralDataConfig,
@@ -27,10 +28,6 @@ from v1tovideo.neural_autoencoder import (
     train_autoencoder,
 )
 
-try:
-    import tomllib
-except ModuleNotFoundError:  # pragma: no cover
-    import tomli as tomllib
 
 DEFAULT_CONFIG_PATH = REPO_ROOT / "scripts" / "configs" / "neural_ae_experiment.toml"
 LOGGER = logging.getLogger(__name__)
@@ -48,32 +45,8 @@ class ExperimentConfig:
     output_dir: Path
 
 
-def _resolve_repo_path(value: Any) -> Path:
-    path = Path(str(value)).expanduser()
-    if not path.is_absolute():
-        path = REPO_ROOT / path
-    return path
-
-
-def _resolve_maybe_repo_path(value: Any) -> Path:
-    path = Path(str(value)).expanduser()
-    if path.is_absolute():
-        return path
-    return REPO_ROOT / path
-
-
-def _load_toml(config_path: Path) -> dict[str, Any]:
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path}")
-    with config_path.open("rb") as fp:
-        data = tomllib.load(fp)
-    if not isinstance(data, dict):
-        raise ValueError(f"Invalid TOML structure in {config_path}")
-    return data
-
-
 def _parse_config(config_path: Path) -> ExperimentConfig:
-    data = _load_toml(config_path)
+    data = load_toml(config_path)
 
     data_cfg = data.get("data")
     model_cfg = data.get("model")
@@ -101,9 +74,9 @@ def _parse_config(config_path: Path) -> ExperimentConfig:
 
     data_config = NeuralDataConfig(
         source=data_source,  # validated in data module
-        path=_resolve_repo_path(data_cfg["path"]) if "path" in data_cfg else None,
+        path=resolve_repo_path(data_cfg["path"]) if "path" in data_cfg else None,
         npz_key=str(data_cfg["npz_key"]) if "npz_key" in data_cfg else None,
-        proc_session_root=_resolve_maybe_repo_path(data_cfg["proc_session_root"])
+        proc_session_root=resolve_maybe_repo_path(data_cfg["proc_session_root"])
         if "proc_session_root" in data_cfg
         else None,
         sessions=sessions,
@@ -181,7 +154,7 @@ def _parse_config(config_path: Path) -> ExperimentConfig:
         device=str(train_cfg.get("device", "cuda")),
     )
 
-    output_dir = _resolve_repo_path(output_cfg.get("dir", "outputs/neural_autoencoder"))
+    output_dir = resolve_repo_path(output_cfg.get("dir", "outputs/neural_autoencoder"))
 
     return ExperimentConfig(
         data=data_config,
