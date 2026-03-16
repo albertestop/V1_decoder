@@ -4,7 +4,6 @@ import json
 import logging
 import sys
 from argparse import ArgumentParser
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -13,11 +12,8 @@ SRC_DIR = REPO_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from v1tovideo.config_utils import load_toml, resolve_maybe_repo_path, resolve_repo_path
+from v1tovideo.neural_autoencoder.config_parser import parse_neural_ae_experiment_config
 from v1tovideo.neural_autoencoder import (
-    ModelSpec,
-    NeuralDataConfig,
-    TrainConfig,
     build_dataloaders,
     build_model,
     build_model_from_target,
@@ -31,141 +27,6 @@ from v1tovideo.neural_autoencoder import (
 
 DEFAULT_CONFIG_PATH = REPO_ROOT / "scripts" / "configs" / "neural_ae_experiment.toml"
 LOGGER = logging.getLogger(__name__)
-
-
-@dataclass
-class ExperimentConfig:
-    data: NeuralDataConfig
-    model: ModelSpec | None
-    model_target: str | None
-    model_kwargs: dict[str, Any]
-    expected_trace_shape: tuple[int, int] | None
-    latent_dim: int | None
-    train: TrainConfig
-    output_dir: Path
-
-
-def _parse_config(config_path: Path) -> ExperimentConfig:
-    data = load_toml(config_path)
-
-    data_cfg = data.get("data")
-    model_cfg = data.get("model")
-    train_cfg = data.get("train", {})
-    output_cfg = data.get("output", {})
-
-    if not isinstance(data_cfg, dict):
-        raise ValueError("Config must define [data]")
-    if not isinstance(model_cfg, dict):
-        raise ValueError("Config must define [model]")
-    if not isinstance(train_cfg, dict):
-        raise ValueError("Config [train] must be a table")
-    if not isinstance(output_cfg, dict):
-        raise ValueError("Config [output] must be a table")
-
-    data_source = str(data_cfg.get("source", "array")).strip().lower()
-    sessions_raw = data_cfg.get("sessions")
-    sessions: list[str] | None
-    if sessions_raw is None:
-        sessions = None
-    else:
-        if not isinstance(sessions_raw, list):
-            raise ValueError("data.sessions must be a list of session names")
-        sessions = [str(session) for session in sessions_raw]
-
-    data_config = NeuralDataConfig(
-        source=data_source,  # validated in data module
-        path=resolve_repo_path(data_cfg["path"]) if "path" in data_cfg else None,
-        npz_key=str(data_cfg["npz_key"]) if "npz_key" in data_cfg else None,
-        proc_session_root=resolve_maybe_repo_path(data_cfg["proc_session_root"])
-        if "proc_session_root" in data_cfg
-        else None,
-        sessions=sessions,
-        responses_subdir=str(data_cfg.get("responses_subdir", "data/responses")),
-        file_pattern=str(data_cfg.get("file_pattern", "*.npy")),
-        max_files_per_session=int(data_cfg["max_files_per_session"])
-        if "max_files_per_session" in data_cfg
-        else None,
-        transpose_proc_session=bool(data_cfg.get("transpose_proc_session", True)),
-        channel_mode=str(data_cfg.get("channel_mode", "error")),
-        time_mode=str(data_cfg.get("time_mode", "error")),
-        batch_size=int(data_cfg.get("batch_size", 32)),
-        val_split=float(data_cfg.get("val_split", 0.1)),
-        shuffle_train=bool(data_cfg.get("shuffle_train", True)),
-        num_workers=int(data_cfg.get("num_workers", 0)),
-        pin_memory=bool(data_cfg.get("pin_memory", True)),
-        drop_last=bool(data_cfg.get("drop_last", False)),
-    )
-
-    architecture = str(model_cfg.get("architecture", "transformer")).strip().lower()
-    supported_architectures = {"mlp", "transformer", "target"}
-    if architecture not in supported_architectures:
-        raise ValueError(
-            f"Unsupported model.architecture '{architecture}'. Supported: {sorted(supported_architectures)}"
-        )
-
-    model_target_raw = model_cfg.get("target")
-    model_target = str(model_target_raw).strip() if model_target_raw is not None else None
-
-    model_kwargs_raw = model_cfg.get("kwargs", {})
-    if not isinstance(model_kwargs_raw, dict):
-        raise ValueError("Config [model.kwargs] must be a table")
-    model_kwargs: dict[str, Any] = dict(model_kwargs_raw)
-
-    model_config: ModelSpec | None = None
-    expected_trace_shape: tuple[int, int] | None = None
-    latent_dim: int | None = None
-
-    if architecture == "target":
-        if not model_target:
-            raise ValueError("model.target is required when model.architecture = 'target'")
-        if "sequence_length" in model_cfg and "num_channels" in model_cfg:
-            expected_trace_shape = (int(model_cfg["sequence_length"]), int(model_cfg["num_channels"]))
-        if "latent_dim" in model_cfg:
-            latent_dim = int(model_cfg["latent_dim"])
-    else:
-        if model_target:
-            raise ValueError(
-                "model.target is only allowed when model.architecture = 'target'. "
-                f"Current architecture is '{architecture}'."
-            )
-        if model_kwargs:
-            raise ValueError(
-                "model.kwargs is only allowed when model.architecture = 'target'. "
-                "Use top-level model fields for built-in architectures."
-            )
-        model_config = ModelSpec(
-            architecture=architecture,
-            sequence_length=int(model_cfg["sequence_length"]),
-            num_channels=int(model_cfg["num_channels"]),
-            latent_dim=int(model_cfg.get("latent_dim", 128)),
-            hidden_dim=int(model_cfg.get("hidden_dim", 256)),
-            num_layers=int(model_cfg.get("num_layers", 4)),
-            num_heads=int(model_cfg.get("num_heads", 8)),
-            dropout=float(model_cfg.get("dropout", 0.1)),
-        )
-        expected_trace_shape = (model_config.sequence_length, model_config.num_channels)
-        latent_dim = model_config.latent_dim
-
-    train_config = TrainConfig(
-        epochs=int(train_cfg.get("epochs", 25)),
-        learning_rate=float(train_cfg.get("learning_rate", 1e-4)),
-        weight_decay=float(train_cfg.get("weight_decay", 1e-4)),
-        grad_clip_norm=float(train_cfg.get("grad_clip_norm", 1.0)),
-        device=str(train_cfg.get("device", "cuda")),
-    )
-
-    output_dir = resolve_repo_path(output_cfg.get("dir", "outputs/neural_autoencoder"))
-
-    return ExperimentConfig(
-        data=data_config,
-        model=model_config,
-        model_target=model_target,
-        model_kwargs=model_kwargs,
-        expected_trace_shape=expected_trace_shape,
-        latent_dim=latent_dim,
-        train=train_config,
-        output_dir=output_dir,
-    )
 
 
 def main() -> None:
@@ -185,7 +46,7 @@ def main() -> None:
         config_path = (Path.cwd() / config_path).resolve()
     LOGGER.info("Using config: %s", config_path)
 
-    config = _parse_config(config_path)
+    config = parse_neural_ae_experiment_config(config_path)
     LOGGER.info("Preparing dataset from source: %s", config.data.source)
 
     train_loader, val_loader, dataset = build_dataloaders(config.data)
@@ -198,14 +59,14 @@ def main() -> None:
             "Update [model] sequence_length/num_channels or your data preprocessing."
         )
 
-    if config.model_target:
-        model = build_model_from_target(config.model_target, kwargs=config.model_kwargs)
-        model_name = config.model_target
+    if str(config.model["architecture"]).lower() == "custom":
+        model_target = str(config.model["target"])
+        model_kwargs = dict(config.model.get("kwargs", {}))
+        model = build_model_from_target(model_target, kwargs=model_kwargs)
+        model_name = model_target
     else:
-        if config.model is None:
-            raise RuntimeError("Internal error: no model spec available")
         model = build_model(config.model)
-        model_name = config.model.architecture
+        model_name = str(config.model["architecture"])
     LOGGER.info("Model initialized: %s", model_name)
 
     LOGGER.info("Training started | epochs=%d | device=%s", config.train.epochs, config.train.device)
@@ -245,8 +106,7 @@ def main() -> None:
     summary: dict[str, Any] = {
         "dataset_shape": dataset.shape,
         "model_name": model_name,
-        "model_target": config.model_target,
-        "model_kwargs": config.model_kwargs,
+        "model_config": config.model,
         "latent_dim": config.latent_dim,
         "train_loss": history[-1]["train_loss"] if history else float("nan"),
         "val_loss": history[-1]["val_loss"] if history else float("nan"),

@@ -1,23 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from typing import Any
 
 import torch
 from torch import nn
-
-
-@dataclass
-class ModelSpec:
-    """Model specification used by the architecture factory."""
-
-    architecture: str
-    sequence_length: int
-    num_channels: int
-    latent_dim: int
-    hidden_dim: int = 256
-    num_layers: int = 4
-    num_heads: int = 8
-    dropout: float = 0.1
 
 
 class BaseNeuralAutoencoder(nn.Module):
@@ -38,26 +24,30 @@ class BaseNeuralAutoencoder(nn.Module):
 class MLPNeuralAutoencoder(BaseNeuralAutoencoder):
     """Simple baseline autoencoder that flattens the trace sequence."""
 
-    def __init__(self, spec: ModelSpec) -> None:
+    def __init__(self, config: dict[str, Any]) -> None:
         super().__init__()
-        input_dim = spec.sequence_length * spec.num_channels
+        sequence_length = int(config["sequence_length"])
+        num_channels = int(config["num_channels"])
+        latent_dim = int(config.get("latent_dim", 128))
+        hidden_dim = int(config.get("hidden_dim", 256))
+        input_dim = sequence_length * num_channels
 
-        self._sequence_length = spec.sequence_length
-        self._num_channels = spec.num_channels
+        self._sequence_length = sequence_length
+        self._num_channels = num_channels
 
         self.encoder = nn.Sequential(
-            nn.Linear(input_dim, spec.hidden_dim),
+            nn.Linear(input_dim, hidden_dim),
             nn.GELU(),
-            nn.Linear(spec.hidden_dim, spec.hidden_dim),
+            nn.Linear(hidden_dim, hidden_dim),
             nn.GELU(),
-            nn.Linear(spec.hidden_dim, spec.latent_dim),
+            nn.Linear(hidden_dim, latent_dim),
         )
         self.decoder = nn.Sequential(
-            nn.Linear(spec.latent_dim, spec.hidden_dim),
+            nn.Linear(latent_dim, hidden_dim),
             nn.GELU(),
-            nn.Linear(spec.hidden_dim, spec.hidden_dim),
+            nn.Linear(hidden_dim, hidden_dim),
             nn.GELU(),
-            nn.Linear(spec.hidden_dim, input_dim),
+            nn.Linear(hidden_dim, input_dim),
         )
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
@@ -72,44 +62,49 @@ class MLPNeuralAutoencoder(BaseNeuralAutoencoder):
 class TransformerNeuralAutoencoder(BaseNeuralAutoencoder):
     """Transformer skeleton with a learned latent bottleneck token set."""
 
-    def __init__(self, spec: ModelSpec) -> None:
+    def __init__(self, config: dict[str, Any]) -> None:
         super().__init__()
-        self.sequence_length = spec.sequence_length
-        self.num_channels = spec.num_channels
+        self.sequence_length = int(config["sequence_length"])
+        self.num_channels = int(config["num_channels"])
+        latent_dim = int(config.get("latent_dim", 128))
+        hidden_dim = int(config.get("hidden_dim", 256))
+        num_layers = int(config.get("num_layers", 4))
+        num_heads = int(config.get("num_heads", 8))
+        dropout = float(config.get("dropout", 0.1))
 
-        self.input_proj = nn.Linear(spec.num_channels, spec.hidden_dim)
-        self.pos_embed = nn.Parameter(torch.randn(1, spec.sequence_length, spec.hidden_dim) * 0.02)
+        self.input_proj = nn.Linear(self.num_channels, hidden_dim)
+        self.pos_embed = nn.Parameter(torch.randn(1, self.sequence_length, hidden_dim) * 0.02)
 
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=spec.hidden_dim,
-            nhead=spec.num_heads,
-            dim_feedforward=spec.hidden_dim * 4,
-            dropout=spec.dropout,
+            d_model=hidden_dim,
+            nhead=num_heads,
+            dim_feedforward=hidden_dim * 4,
+            dropout=dropout,
             batch_first=True,
             activation="gelu",
         )
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=spec.num_layers)
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
         self.to_latent = nn.Sequential(
-            nn.LayerNorm(spec.hidden_dim),
-            nn.Linear(spec.hidden_dim, spec.latent_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, latent_dim),
         )
         self.from_latent = nn.Sequential(
-            nn.Linear(spec.latent_dim, spec.hidden_dim),
+            nn.Linear(latent_dim, hidden_dim),
             nn.GELU(),
-            nn.Linear(spec.hidden_dim, spec.hidden_dim),
+            nn.Linear(hidden_dim, hidden_dim),
         )
 
         decoder_layer = nn.TransformerEncoderLayer(
-            d_model=spec.hidden_dim,
-            nhead=spec.num_heads,
-            dim_feedforward=spec.hidden_dim * 4,
-            dropout=spec.dropout,
+            d_model=hidden_dim,
+            nhead=num_heads,
+            dim_feedforward=hidden_dim * 4,
+            dropout=dropout,
             batch_first=True,
             activation="gelu",
         )
-        self.decoder = nn.TransformerEncoder(decoder_layer, num_layers=spec.num_layers)
-        self.output_proj = nn.Linear(spec.hidden_dim, spec.num_channels)
+        self.decoder = nn.TransformerEncoder(decoder_layer, num_layers=num_layers)
+        self.output_proj = nn.Linear(hidden_dim, self.num_channels)
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         h = self.input_proj(x)
@@ -125,13 +120,13 @@ class TransformerNeuralAutoencoder(BaseNeuralAutoencoder):
         return self.output_proj(decoded)
 
 
-def build_model(spec: ModelSpec) -> BaseNeuralAutoencoder:
-    """Construct a neural autoencoder from a config specification."""
-    architecture = spec.architecture.lower().strip()
+def build_model(config: dict[str, Any]) -> BaseNeuralAutoencoder:
+    """Construct a neural autoencoder from a raw config dictionary."""
+    architecture = str(config["architecture"]).lower().strip()
     if architecture == "mlp":
-        return MLPNeuralAutoencoder(spec)
+        return MLPNeuralAutoencoder(config)
     if architecture == "transformer":
-        return TransformerNeuralAutoencoder(spec)
+        return TransformerNeuralAutoencoder(config)
 
     supported = ["mlp", "transformer"]
-    raise ValueError(f"Unsupported architecture '{spec.architecture}'. Supported: {supported}")
+    raise ValueError(f"Unsupported architecture '{config['architecture']}'. Supported: {supported}")

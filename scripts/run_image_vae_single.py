@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import sys
 from argparse import ArgumentParser
-from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -11,48 +10,11 @@ SRC_DIR = REPO_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from v1tovideo.config_utils import load_toml, resolve_repo_path
 from v1tovideo.image_autoencoder import encode_decode_image, load_sd3_vae
+from v1tovideo.image_autoencoder.config_parser import parse_image_vae_single_config
 
 DEFAULT_CONFIG_PATH = REPO_ROOT / "scripts" / "configs" / "image_vae_single.toml"
 LOGGER = logging.getLogger(__name__)
-
-
-@dataclass
-class SingleRunConfig:
-    image_path: Path
-    output_dir: Path
-    height: int
-    width: int
-    prefix: str
-
-
-def _parse_config(config_path: Path) -> SingleRunConfig:
-    data = load_toml(config_path)
-    run = data.get("run")
-    if not isinstance(run, dict):
-        raise ValueError(f"Config must define a [run] table: {config_path}")
-
-    try:
-        image_path = resolve_repo_path(run["image_path"])
-    except KeyError as exc:
-        raise ValueError("Missing required config key: run.image_path") from exc
-
-    output_dir = resolve_repo_path(run.get("output_dir", "outputs/image_compression/single"))
-    height = int(run.get("height", 144))
-    width = int(run.get("width", 256))
-    prefix = str(run.get("prefix", "sample"))
-
-    if height <= 0 or width <= 0:
-        raise ValueError("run.height and run.width must be positive integers")
-
-    return SingleRunConfig(
-        image_path=image_path,
-        output_dir=output_dir,
-        height=height,
-        width=width,
-        prefix=prefix,
-    )
 
 
 def main() -> None:
@@ -72,7 +34,7 @@ def main() -> None:
         config_path = (Path.cwd() / config_path).resolve()
     LOGGER.info("Using config: %s", config_path)
 
-    config = _parse_config(config_path)
+    config = parse_image_vae_single_config(config_path)
     LOGGER.info(
         "Running single-image VAE | image=%s | size=%dx%d",
         config.image_path,

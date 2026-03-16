@@ -29,9 +29,10 @@ num_workers = 0
 pin_memory = true
 drop_last = false
 
-[model]
-# Options: "mlp", "transformer", "target"
 architecture = "transformer"
+
+[built_in_model]
+# Used when architecture is one of: "mlp", "transformer"
 sequence_length = 300
 num_channels = 5443
 latent_dim = 256
@@ -40,16 +41,12 @@ num_layers = 4
 num_heads = 8
 dropout = 0.1
 
-# Custom model mode (used only when architecture = "target"):
-# target = "v1tovideo.neural_autoencoder.models:TransformerNeuralAutoencoder"
-# target = "v1tovideo.neural_autoencoder.models:TemplateNeuralAutoencoder"
-# target = "my_package.my_models.MyCustomAutoencoder"
-#
-# Pass constructor arguments to your custom model class (only in target mode):
-[model.kwargs]
-# sequence_length = 300
-# num_channels = 5443
-# latent_dim = 256
+[custom_model]
+# Used only when architecture = "custom"
+target = "v1tovideo.neural_autoencoder.models:TransformerNeuralAutoencoder"
+sequence_length = 300
+num_channels = 5443
+latent_dim = 256
 
 [train]
 epochs = 35

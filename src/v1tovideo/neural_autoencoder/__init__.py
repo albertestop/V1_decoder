@@ -1,7 +1,7 @@
 """Neural activity autoencoder components."""
 
 from .data import NeuralDataConfig, NeuralTraceDataset, build_dataloaders
-from .models import BaseNeuralAutoencoder, ModelSpec, build_model, build_model_from_target
+from .models import BaseNeuralAutoencoder, build_model, build_model_from_target
 from .synthetic import (
     SyntheticFactorDatasetConfig,
     generate_factor_dataset,
@@ -20,7 +20,6 @@ from .trainer import (
 __all__ = [
     "BaseNeuralAutoencoder",
     "EvalSummary",
-    "ModelSpec",
     "NeuralDataConfig",
     "NeuralTraceDataset",
     "SyntheticFactorDatasetConfig",
