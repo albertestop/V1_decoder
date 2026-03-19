@@ -83,7 +83,7 @@ def _parse_config(config_path: Path) -> GeneratorRunConfig:
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 
-    parser = ArgumentParser(description="Generate synthetic neural dataset from K factor traces.")
+    parser = ArgumentParser(description="Generate synthetic neural tensor dataset from K factor traces.")
     parser.add_argument(
         "--config",
         type=Path,

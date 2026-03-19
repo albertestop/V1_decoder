@@ -8,7 +8,7 @@ import numpy as np
 
 @dataclass
 class SyntheticFactorDatasetConfig:
-    """Configuration for synthetic neural traces generated from latent factors."""
+    """Configuration for synthetic tensors generated from latent factors."""
 
     n_samples: int = 336
     sequence_length: int = 300
@@ -21,7 +21,7 @@ class SyntheticFactorDatasetConfig:
 
 
 def generate_factor_dataset(config: SyntheticFactorDatasetConfig) -> np.ndarray:
-    """Generate [N, T, C] synthetic traces from low-rank K-factor dynamics."""
+    """Generate synthetic arrays with shape [N, P, T]."""
     if config.n_samples <= 0 or config.sequence_length <= 0 or config.n_neurons <= 0:
         raise ValueError("n_samples, sequence_length, and n_neurons must be positive")
     if config.n_factors <= 0:
@@ -41,7 +41,7 @@ def generate_factor_dataset(config: SyntheticFactorDatasetConfig) -> np.ndarray:
         size=(config.n_samples, config.sequence_length, config.n_factors),
     ).astype(np.float32)
 
-    # Low-rank neural activity: [N, T, C]
+    # Low-rank activity arranged as [N, P, T], where P=sequence_length and T=n_neurons.
     traces = np.einsum("ntk,ck->ntc", factors, loadings, optimize=True).astype(np.float32)
 
     if config.baseline_std > 0:

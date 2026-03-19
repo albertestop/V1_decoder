@@ -18,6 +18,7 @@ from v1tovideo.neural_autoencoder import (
     build_model,
     build_model_from_target,
     evaluate_autoencoder,
+    infer_batch_shape,
     save_checkpoint,
     save_reconstruction_plots,
     save_reconstruction_artifacts,
@@ -40,34 +41,37 @@ def main() -> None:
         help="Path to TOML config file (default: scripts/configs/neural_ae_experiment.toml).",
     )
     args = parser.parse_args()
-
     config_path = args.config.expanduser()
     if not config_path.is_absolute():
         config_path = (Path.cwd() / config_path).resolve()
     LOGGER.info("Using config: %s", config_path)
-
     config = parse_neural_ae_experiment_config(config_path)
-    LOGGER.info("Preparing dataset from source: %s", config.data.source)
-
+    
+    LOGGER.info("Preparing dataset")
     train_loader, val_loader, dataset = build_dataloaders(config.data)
     LOGGER.info("Dataset loaded | samples=%d | shape=%s", len(dataset), getattr(dataset, "shape", None))
+    train_example = next(iter(train_loader))
+    num_tokens, token_dim = infer_batch_shape(train_example)
+    LOGGER.info("Inferred model input from first training batch | token_dim=%d | num_tokens(neurons)=%d", token_dim, num_tokens)
 
-    dataset_shape = dataset.shape[1:]
-    if config.expected_trace_shape is not None and dataset_shape != config.expected_trace_shape:
-        raise ValueError(
-            f"Model expects traces [T, C]={config.expected_trace_shape}, but dataset has {dataset_shape}. "
-            "Update [model] sequence_length/num_channels or your data preprocessing."
-        )
-
+    LOGGER.info("Loading %s model", config.model["architecture"])
     if str(config.model["architecture"]).lower() == "custom":
         model_target = str(config.model["target"])
         model_kwargs = dict(config.model.get("kwargs", {}))
+        model_kwargs.setdefault("token_dim", token_dim)
+        model_kwargs.setdefault("num_tokens", num_tokens)
+        config.model["kwargs"] = model_kwargs
         model = build_model_from_target(model_target, kwargs=model_kwargs)
         model_name = model_target
     else:
-        model = build_model(config.model)
+        model_config = dict(config.model)
+        model_config["token_dim"] = token_dim
+        model_config["num_tokens"] = num_tokens
+        config.model = model_config
+        model = build_model(model_config)
         model_name = str(config.model["architecture"])
     LOGGER.info("Model initialized: %s", model_name)
+    latent_dim = int(config.model["latent_dim"]) if "latent_dim" in config.model else None
 
     LOGGER.info("Training started | epochs=%d | device=%s", config.train.epochs, config.train.device)
     history = train_autoencoder(
@@ -101,22 +105,20 @@ def main() -> None:
         prefix="val_sample",
         num_neurons=3,
     )
-    LOGGER.info("Saved reconstruction plots (3 neurons + population heatmaps)")
+    LOGGER.info("Saved reconstruction plots (3 tokens + parameter/token heatmaps)")
 
     summary: dict[str, Any] = {
         "dataset_shape": dataset.shape,
         "model_name": model_name,
         "model_config": config.model,
-        "latent_dim": config.latent_dim,
+        "latent_dim": latent_dim,
         "train_loss": history[-1]["train_loss"] if history else float("nan"),
         "val_loss": history[-1]["val_loss"] if history else float("nan"),
         "val_mse": eval_metrics["mse"],
         "val_mae": eval_metrics["mae"],
     }
-    if config.expected_trace_shape is not None and config.latent_dim is not None:
-        summary["compression_ratio"] = float(
-            (config.expected_trace_shape[0] * config.expected_trace_shape[1]) / config.latent_dim
-        )
+    if latent_dim is not None:
+        summary["compression_ratio"] = float((token_dim * num_tokens) / latent_dim)
     else:
         summary["compression_ratio"] = None
 

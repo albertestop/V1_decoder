@@ -5,7 +5,7 @@ from .core import (
     build_model,
 )
 from .loading import build_model_from_target
-from .template_autoencoder import TemplateNeuralAutoencoder
+from .TAE import TAE
 
 __all__ = [
     "BaseNeuralAutoencoder",

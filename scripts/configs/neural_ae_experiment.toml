@@ -1,24 +1,6 @@
 [data]
-# Data source options:
-# - "proc_session_responses": load many files at <proc_session_root>/<session>/<responses_subdir>/*.npy
-#   where each file is typically [n_neurons, length]
-# - "array": load one pre-packed .npy/.npz array of shape [N, T, C]
-source = "proc_session_responses"
-
-# Used by source = "proc_session_responses"
-proc_session_root = "/home/albertestop/data/processed_data/sensorium_all_2023"
-sessions = ["2025-07-04_04_ESPM154_008"]
-responses_subdir = "data/responses"
-file_pattern = "*.npy"
-# max_files_per_session = 128
-transpose_proc_session = true
-# If sessions have different neuron counts, set to "truncate_min" to align automatically.
-channel_mode = "error"
-# If sessions have different trace lengths, set to "truncate_min".
-time_mode = "error"
-
-# Used by source = "array"
-# path = "data/neural/example_traces.npy"
+# Load one pre-packed .npy/.npz array of shape [N, P, T]
+path = "data/responses/responses.npy"
 # path = "data/neural/synthetic_factors_336x300x5443.npy"
 # npz_key = "traces"
 
@@ -29,12 +11,10 @@ num_workers = 0
 pin_memory = true
 drop_last = false
 
-architecture = "transformer"
+architecture = "custom"
 
 [built_in_model]
 # Used when architecture is one of: "mlp", "transformer"
-sequence_length = 300
-num_channels = 5443
 latent_dim = 256
 hidden_dim = 512
 num_layers = 4
@@ -43,10 +23,9 @@ dropout = 0.1
 
 [custom_model]
 # Used only when architecture = "custom"
-target = "v1tovideo.neural_autoencoder.models:TransformerNeuralAutoencoder"
-sequence_length = 300
-num_channels = 5443
-latent_dim = 256
+target = "v1tovideo.neural_autoencoder.models:TAE"
+latent_dim = 128
+input_dim = 128
 
 [train]
 epochs = 35
