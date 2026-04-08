@@ -37,8 +37,10 @@ def parse_neural_ae_experiment_config(config_path: Path) -> ExperimentConfig:
     if not isinstance(output_cfg, dict):
         raise ValueError("Config [output] must be a table")
 
+    data_path = Path(str(data_cfg["data_root_path"])).expanduser() / Path(str(data_cfg["dataset_id"])).expanduser()
+
     data_config = NeuralDataConfig(
-        path=resolve_repo_path(data_cfg["path"]) if "path" in data_cfg else None,
+        path=data_path,
         npz_key=str(data_cfg["npz_key"]) if "npz_key" in data_cfg else None,
         batch_size=int(data_cfg.get("batch_size", 32)),
         val_split=float(data_cfg.get("val_split", 0.1)),
@@ -79,12 +81,26 @@ def parse_neural_ae_experiment_config(config_path: Path) -> ExperimentConfig:
             "dropout": float(built_in_model_cfg.get("dropout", 0.1)),
         }
 
+    loss_cfg_raw = train_cfg.get("loss", {})
+    if isinstance(loss_cfg_raw, str):
+        loss_name = loss_cfg_raw
+        loss_cfg: dict[str, Any] = {}
+    elif isinstance(loss_cfg_raw, dict):
+        loss_cfg = loss_cfg_raw
+        loss_name = str(loss_cfg.get("name", "masked_mse"))
+    else:
+        raise ValueError("Config [train].loss must be a string or table")
+
     train_config = TrainConfig(
         epochs=int(train_cfg.get("epochs", 25)),
         learning_rate=float(train_cfg.get("learning_rate", 1e-4)),
         weight_decay=float(train_cfg.get("weight_decay", 1e-4)),
         grad_clip_norm=float(train_cfg.get("grad_clip_norm", 1.0)),
         device=str(train_cfg.get("device", "cuda")),
+        loss_name=str(loss_name),
+        poisson_log_input=bool(loss_cfg.get("poisson_log_input", train_cfg.get("poisson_log_input", True))),
+        poisson_full=bool(loss_cfg.get("poisson_full", train_cfg.get("poisson_full", False))),
+        poisson_eps=float(loss_cfg.get("poisson_eps", train_cfg.get("poisson_eps", 1e-8))),
     )
 
     output_dir = resolve_repo_path(output_cfg.get("dir", "outputs/neural_autoencoder"))

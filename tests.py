@@ -1,14 +1,26 @@
 from __future__ import annotations
 
-import json
+import logging
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+from functools import partial
+
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import pytorch_lightning as pl
+from torch import nn
+from torch.optim import AdamW
+from torch.utils.data import DataLoader, Dataset, Subset
 import logging
 import sys
 from argparse import ArgumentParser
 from pathlib import Path
 from typing import Any
-import shutil
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parent
 SRC_DIR = REPO_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
@@ -18,20 +30,19 @@ from v1tovideo.neural_autoencoder import (
     build_dataloaders,
     build_model,
     build_model_from_target,
-    evaluate_autoencoder,
     infer_batch_shape,
-    save_checkpoint,
     save_reconstruction_plots,
-    save_reconstruction_artifacts,
-    train_autoencoder,
 )
 
 
-DEFAULT_CONFIG_PATH = REPO_ROOT / "scripts" / "configs" / "neural_ae_experiment.toml"
-LOGGER = logging.getLogger(__name__)
 
 
-def main() -> None:
+
+if __name__ == '__main__':
+
+    DEFAULT_CONFIG_PATH = REPO_ROOT / "scripts" / "configs" / "neural_ae_experiment.toml"
+    LOGGER = logging.getLogger(__name__)
+
     logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 
     parser = ArgumentParser(description="Train/evaluate a configurable neural autoencoder skeleton.")
@@ -71,54 +82,8 @@ def main() -> None:
         model = build_model(model_config)
         model_name = str(config.model["architecture"])
     LOGGER.info("Model initialized: %s", model_name)
-    latent_dim = int(config.model["latent_dim"]) if "latent_dim" in config.model else None
-
-    LOGGER.info("Training started | epochs=%d | device=%s", config.train.epochs, config.train.device)
-    history = train_autoencoder(
-        model=model,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        config=config.train,
-    )
-
-    eval_metrics = evaluate_autoencoder(model=model, dataloader=val_loader, device=config.train.device)
-
+    model.load_state_dict(torch.load("/home/albertestop/visual_cortex_study/transformer_arch/outputs/neural_autoencoder/default_run/model.pt"))
     output_dir = config.output_dir
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    checkpoint_path = output_dir / "model.pt"
-    save_checkpoint(model, checkpoint_path)
-
-    summary: dict[str, Any] = {
-        "dataset_shape": dataset.shape,
-        "model_name": model_name,
-        "model_config": config.model,
-        "latent_dim": latent_dim,
-        "train_loss": history[-1]["train_loss"] if history else float("nan"),
-        "val_loss": history[-1]["val_loss"] if history else float("nan"),
-        "val_mse": eval_metrics["mse"],
-        "val_mae": eval_metrics["mae"],
-    }
-    if latent_dim is not None:
-        summary["compression_ratio"] = float((token_dim * dataset_num_tokens) / latent_dim)
-    else:
-        summary["compression_ratio"] = None
-
-    with (output_dir / "history.json").open("w", encoding="utf-8") as fp:
-        json.dump(history, fp, indent=2)
-
-    with (output_dir / "summary.json").open("w", encoding="utf-8") as fp:
-        json.dump(summary, fp, indent=2)
-
-    shutil.copy(DEFAULT_CONFIG_PATH, output_dir / "config.toml")
-
-    save_reconstruction_artifacts(
-        model=model,
-        sample_batch=next(iter(val_loader)),
-        output_dir=output_dir,
-        device=config.train.device,
-        prefix="val_sample",
-    )
     save_reconstruction_plots(
         model=model,
         output_dir=output_dir,
@@ -128,11 +93,3 @@ def main() -> None:
         config=config.data,
         device=config.train.device
     )
-    LOGGER.info("Saved reconstruction plots")
-
-    LOGGER.info("Run finished | output_dir=%s", output_dir)
-    print(summary)
-
-
-if __name__ == "__main__":
-    main()
