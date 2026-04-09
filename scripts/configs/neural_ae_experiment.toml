@@ -1,6 +1,6 @@
 [data]
-data_root_path = "/home/albertestop/visual_cortex_study/transformer_arch/data"
-dataset_id = "synthetic_0"
+data_root_path = "/home/albertestop/data/processed_data/tba"
+dataset_id = "2025-07-04_04_ESPM154_vol_000"
 
 batch_size = 16
 val_split = 0.1
@@ -21,12 +21,12 @@ dropout = 0.1
 
 [custom_model]
 # Used only when architecture = "custom"
-target = "v1tovideo.neural_autoencoder.models:TAE"
+target = "v1tovideo.neural_autoencoder.models:PAE"
 latent_dim = 128
 input_dim = 128
 
 [train]
-epochs = 30
+epochs = 35
 learning_rate = 1e-4
 weight_decay = 1e-4
 grad_clip_norm = 1.0
