@@ -292,9 +292,9 @@ def save_reconstruction_plots(
 
     vol_idx = np.random.randint(0, len(recons_trial))
     for token_idx in range(len(recons_trial[0, 0, :])):
-        plt.figure(figsize=(8, 3))
-        plt.plot(np.arange(len(original_trial[vol_idx, :, 0])), original_trial[vol_idx, :, token_idx], label="Original")
-        plt.plot(np.arange(len(recons_trial[vol_idx, :, 0])), recons_trial[vol_idx, :, token_idx], label="Recontructed")
+        plt.figure(figsize=(16, 6))
+        plt.scatter(np.arange(len(original_trial[vol_idx, :, 0])), original_trial[vol_idx, :, token_idx], label="Original", s=10)
+        plt.scatter(np.arange(len(recons_trial[vol_idx, :, 0])), recons_trial[vol_idx, :, token_idx], label="Recontructed", s=10)
         plt.xlabel("Neuron")
         plt.ylabel("Token Value")
         plt.title(f"Token {token_idx} value of each neuron on a single cycle: before vs after reconstruction")
@@ -306,11 +306,11 @@ def save_reconstruction_plots(
     neuron = np.random.randint(0, len(recons_trial[0, :, 0]))
     for token_idx in range(len(recons_trial[0, 0, :])):
         plt.figure(figsize=(8, 3))
-        plt.scatter(np.arange(len(original_trial[:, int(neuron), 0])), original_trial[:, int(neuron), token_idx], label="Original")
-        plt.scatter(np.arange(len(recons_trial[:, int(neuron), 0])), recons_trial[:, int(neuron), token_idx], label="Recontructed")
+        plt.plot(np.arange(len(original_trial[:, int(neuron), 0])), original_trial[:, int(neuron), token_idx], label="Original")
+        plt.plot(np.arange(len(recons_trial[:, int(neuron), 0])), recons_trial[:, int(neuron), token_idx], label="Recontructed")
         plt.xlabel("Cycle n")
         plt.ylabel("Token Value")
-        plt.title(f"Token {token_idx} of neuron {neuron} during trial: before vs after reconstruction")
+        plt.title(f"Token {token_idx} of neuron {int(original_trial[0, int(neuron), 0])} during trial: before vs after reconstruction")
         plt.legend()
         plt.tight_layout()
         plt.savefig(output_dir / f"neuron_n_token_{token_idx}.png")

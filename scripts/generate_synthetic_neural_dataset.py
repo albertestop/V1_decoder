@@ -7,19 +7,20 @@ from argparse import ArgumentParser
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import shutil
+
+import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = REPO_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
-NEURAL_AE_DIR = SRC_DIR / "v1tovideo" / "neural_autoencoder"
-if str(NEURAL_AE_DIR) not in sys.path:
-    sys.path.insert(0, str(NEURAL_AE_DIR))
 
-from synthetic import (
+from v1tovideo.neural_autoencoder.synthetic import (
     SyntheticFactorDatasetConfig,
-    save_factor_dataset,
+    generate_factor_dataset,
 )
+from synthetic_data.sc.post import *
 
 try:
     import tomllib
@@ -99,17 +100,47 @@ def main() -> None:
     LOGGER.info("Using config: %s", config_path)
     config = _parse_config(config_path)
 
-    out_path = save_factor_dataset(config.synthetic, config.output_path)
+    traces = generate_factor_dataset(config.synthetic)
+    n_samples, sequence_length, n_neurons = traces.shape
+
+    # Build [N, P, T, 3]: [neuron_idx, position_idx, synthetic_value].
+    neuron_idx = np.arange(n_neurons, dtype=np.float32).reshape(1, 1, n_neurons)
+    position_idx = np.arange(sequence_length, dtype=np.float32).reshape(1, sequence_length, 1)
+    neuron_channel = np.broadcast_to(neuron_idx, (n_samples, sequence_length, n_neurons))
+    position_channel = np.broadcast_to(position_idx, (n_samples, sequence_length, n_neurons))
+    enriched_traces = np.stack((neuron_channel, position_channel, traces), axis=-1)
+    flattened_traces = enriched_traces.reshape(n_samples * sequence_length, n_neurons, 3)
+
+    out_path = config.output_path
+    out_path.mkdir(parents=True, exist_ok=True)
+    Path(out_path / Path('data')).mkdir(parents=True, exist_ok=True)
+    np.save(f'{out_path}/data/responses.npy', flattened_traces)
+
     summary = {
         "output_path": str(out_path),
-        "shape": [config.synthetic.n_samples, config.synthetic.sequence_length, config.synthetic.n_neurons],
+        "shape": [n_samples * sequence_length, n_neurons, 3],
         "n_factors": config.synthetic.n_factors,
         "seed": config.synthetic.seed,
     }
 
-    summary_path = out_path.with_suffix(".json")
+    summary_path = Path(f'{out_path}/summary.json')
     with summary_path.open("w", encoding="utf-8") as fp:
         json.dump(summary, fp, indent=2)
+
+    trial_dataset_map = {}
+    for i in range(config.synthetic.n_samples):
+        trial_dataset_map[str(i)] = {
+            'trial_id': str(i),
+            'trial_index': int(i),
+            'dataset_rows': str(i * config.synthetic.sequence_length) + ',' + str((i * config.synthetic.sequence_length) + config.synthetic.sequence_length)
+    }
+    json_map_path = os.path.join(config.output_path, 'trial_dataset_map.json')
+    with open(json_map_path, 'w') as file:
+        json.dump(trial_dataset_map, file, indent=2)
+    
+    post(config.output_path, config.synthetic.sequence_length, config.synthetic.n_samples)
+
+    shutil.copy(DEFAULT_CONFIG_PATH, config.output_path / "config.toml")
 
     LOGGER.info("Synthetic dataset generated: %s", out_path)
     print(summary)
