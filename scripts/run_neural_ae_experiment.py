@@ -59,6 +59,7 @@ def main() -> None:
     if str(config.model["architecture"]).lower() == "custom":
         model_target = str(config.model["target"])
         model_kwargs = dict(config.model.get("kwargs", {}))
+        model_kwargs.setdefault("num_tokens", num_tokens)
         model_kwargs.setdefault("token_dim", token_dim)
         config.model["kwargs"] = model_kwargs
         model = build_model_from_target(model_target, kwargs=model_kwargs)

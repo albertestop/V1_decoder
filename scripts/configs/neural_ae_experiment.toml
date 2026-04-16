@@ -21,9 +21,10 @@ dropout = 0.1
 
 [custom_model]
 # Used only when architecture = "custom"
-target = "v1tovideo.neural_autoencoder.models:PAE"
+target = "v1tovideo.neural_autoencoder.models:TAE_v2"
 latent_dim = 128
 input_dim = 128
+latent_num_tokens = 512
 
 [train]
 epochs = 35
