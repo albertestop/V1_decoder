@@ -2,22 +2,16 @@ from __future__ import annotations
 
 import logging
 import time
-import os
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from functools import partial
 
-import matplotlib.pyplot as plt
-import numpy as np
 import torch
 import pytorch_lightning as pl
+import torch.nn.functional as F
 from torch import nn
 from torch.optim import AdamW
-from torch.utils.data import DataLoader, Dataset, Subset
-
-from v1tovideo.neural_autoencoder.data import collate_padded_trials
+from torch.utils.data import DataLoader
 
 LOGGER = logging.getLogger(__name__)
 
@@ -33,6 +27,9 @@ class TrainConfig:
     poisson_log_input: bool = True
     poisson_full: bool = False
     poisson_eps: float = 1e-8
+    loss_weight_id: float = 1.0
+    loss_weight_time: float = 1.0
+    loss_weight_rec: float = 1.0
 
 
 def _resolve_device(device: str) -> torch.device:
@@ -57,9 +54,14 @@ class AutoencoderLightningModule(pl.LightningModule):
         self.save_hyperparameters(ignore=["model"])
         self.config = config
         self._loss_name = str(config.loss_name).strip().lower()
-        supported_losses = {"masked_mse", "poisson_nll"}
+        supported_losses = {"masked_mse", "poisson_nll", "combined"}
         if self._loss_name not in supported_losses:
             raise ValueError(f"Unsupported loss_name '{config.loss_name}'. Supported: {sorted(supported_losses)}")
+        self._loss_weights = (
+            float(config.loss_weight_id),
+            float(config.loss_weight_time),
+            float(config.loss_weight_rec),
+        )
         self._poisson_nll = nn.PoissonNLLLoss(
             log_input=bool(config.poisson_log_input),
             full=bool(config.poisson_full),
@@ -94,24 +96,82 @@ class AutoencoderLightningModule(pl.LightningModule):
         per_element = self._poisson_nll(recon, x)
         return (per_element * valid).sum() / denom
 
-    def _compute_loss(self, recon: torch.Tensor, x: torch.Tensor, padding_mask: torch.Tensor) -> torch.Tensor:
+    def _masked_combined_loss(
+        self,
+        id_logits: torch.Tensor,
+        time_pred: torch.Tensor,
+        rec_pred: torch.Tensor,
+        x: torch.Tensor,
+        padding_mask: torch.Tensor,
+    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        valid = ~padding_mask
+        id_target = x[..., 0].long()
+        time_target = x[..., 1]
+        rec_target = x[..., 2]
+
+        ignore_index = -100
+        id_target_masked = id_target.masked_fill(~valid, ignore_index)
+        loss_id = F.cross_entropy(
+            id_logits.reshape(-1, id_logits.shape[-1]),
+            id_target_masked.reshape(-1),
+            ignore_index=ignore_index,
+        )
+
+        valid_float = valid.to(dtype=x.dtype)
+        denom = valid_float.sum().clamp_min(1.0)
+        loss_time = (((time_pred.squeeze(-1) - time_target) ** 2) * valid_float).sum() / denom
+        loss_rec = (((rec_pred.squeeze(-1) - rec_target) ** 2) * valid_float).sum() / denom
+
+        w_id, w_time, w_rec = self._loss_weights
+        total = (w_id * loss_id) + (w_time * loss_time) + (w_rec * loss_rec)
+        return total, {"loss_id": loss_id, "loss_time": loss_time, "loss_rec": loss_rec}
+
+    def _forward_outputs(self, x: torch.Tensor, padding_mask: torch.Tensor) -> dict[str, torch.Tensor]:
+        out = self.model(x, padding_mask=padding_mask)
+        if not isinstance(out, (tuple, list)):
+            raise ValueError("Model forward must return a tuple/list")
+        if len(out) == 2:
+            recon, latents = out
+            return {"recon": recon, "latents": latents}
+        if len(out) == 4:
+            id_logits, time_pred, rec_pred, latents = out
+            recon = self.model.predict(x, padding_mask)
+            return {
+                "id_logits": id_logits,
+                "time_pred": time_pred,
+                "rec_pred": rec_pred,
+                "recon": recon,
+                "latents": latents,
+            }
+        raise ValueError(f"Unsupported model output tuple length: {len(out)}")
+
+    def _compute_loss(self, outputs: torch.Tensor, x: torch.Tensor, padding_mask: torch.Tensor) -> torch.Tensor:
         if self._loss_name == "masked_mse":
-            return self._masked_mse(recon, x, padding_mask)
-        return self._masked_poisson_nll(recon, x, padding_mask)
+            return self._masked_mse(outputs["recon"], x, padding_mask)
+        if self._loss_name == "poisson_nll":
+            return self._masked_poisson_nll(outputs["recon"], x, padding_mask)
+        if self._loss_name == "combined":
+            if not all(k in outputs for k in ("id_logits", "time_pred", "rec_pred")):
+                raise ValueError("combined loss requires model outputs: id_logits, time_pred, rec_pred")
+            loss, terms = self._masked_combined_loss(outputs["id_logits"], outputs["time_pred"], outputs["rec_pred"], x, padding_mask)
+            self.log("loss_id", terms["loss_id"], on_step=False, on_epoch=True, batch_size=x.shape[0])
+            self.log("loss_time", terms["loss_time"], on_step=False, on_epoch=True, batch_size=x.shape[0])
+            self.log("loss_rec", terms["loss_rec"], on_step=False, on_epoch=True, batch_size=x.shape[0])
+            return loss
 
     def training_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
         x, padding_mask = self._unpack_batch(batch)
-        recon, _ = self.model(x, padding_mask=padding_mask)
-        loss = self._compute_loss(recon, x, padding_mask)
+        outputs = self._forward_outputs(x, padding_mask)
+        loss = self._compute_loss(outputs, x, padding_mask)
         self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True, batch_size=x.shape[0])
         return loss
 
     def validation_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
         x, padding_mask = self._unpack_batch(batch)
-        recon, _ = self.model(x, padding_mask=padding_mask)
-        loss = self._compute_loss(recon, x, padding_mask)
-        mse = self._masked_mse(recon, x, padding_mask)
-        mae = self._masked_mae(recon, x, padding_mask)
+        outputs = self._forward_outputs(x, padding_mask)
+        loss = self._compute_loss(outputs, x, padding_mask)
+        mse = self._masked_mse(outputs["recon"], x, padding_mask)
+        mae = self._masked_mae(outputs["recon"], x, padding_mask)
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, batch_size=x.shape[0])
         self.log("val_mse", mse, on_step=False, on_epoch=True, batch_size=x.shape[0])
         self.log("val_mae", mae, on_step=False, on_epoch=True, batch_size=x.shape[0])
@@ -207,129 +267,3 @@ def save_checkpoint(model: nn.Module, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), path)
 
-
-def save_reconstruction_artifacts(
-    model: nn.Module,
-    sample_batch: Any,
-    output_dir: Path,
-    device: str = "cuda",
-    prefix: str = "sample",
-) -> None:
-    """Save input tensors, latent vectors, and reconstructions for inspection."""
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    dev = _resolve_device(device)
-    model.eval().to(dev)
-
-    with torch.no_grad():
-        if torch.is_tensor(sample_batch):
-            x = sample_batch.to(dev)
-            padding_mask = torch.zeros((x.shape[0], x.shape[1]), dtype=torch.bool, device=dev)
-        else:
-            x = sample_batch[0].to(dev)
-            padding_mask = sample_batch[2].to(dev).bool()
-        recon, latents = model(x, padding_mask=padding_mask)
-
-    torch.save(x.cpu(), output_dir / f"{prefix}.input.pt")
-    torch.save(padding_mask.cpu(), output_dir / f"{prefix}.padding_mask.pt")
-    torch.save(latents.cpu(), output_dir / f"{prefix}.latents.pt")
-    torch.save(recon.cpu(), output_dir / f"{prefix}.reconstruction.pt")
-
-
-def save_reconstruction_plots(
-    model: nn.Module,
-    output_dir: Path,
-    dataset: Dataset,
-    dataset_map: dict,
-    val_map_idx: np.ndarray,
-    config,
-    device: str = "cuda",
-) -> None:
-    """Save before/after plots for selected tokens and parameter heatmaps."""
-    output_dir.mkdir(parents=True, exist_ok=True)
-    dev = _resolve_device(device)
-    model.eval().to(dev)
-
-    plot_trial_idx = np.random.choice(val_map_idx)
-    plot_rows_start, plot_rows_end = map(int, dataset_map[f"{plot_trial_idx}"]["dataset_rows"].split(","))
-    plot_indices = set(range(plot_rows_start, plot_rows_end))
-    plot_set = Subset(dataset, list(plot_indices))
-    pad_to_tokens = int(getattr(dataset, "max_tokens"))
-    collate_fn = partial(collate_padded_trials, pad_to_tokens=pad_to_tokens)
-    plot_loader = DataLoader(
-        plot_set,
-        batch_size=1,
-        shuffle=False,
-        num_workers=config.num_workers,
-        pin_memory=config.pin_memory,
-        drop_last=config.drop_last,
-        collate_fn=collate_fn,
-    )
-
-    original_trial = []
-    recons_trial = []
-    for batch in plot_loader:
-        with torch.no_grad():
-            if torch.is_tensor(batch):
-                x = batch.to(dev)
-                padding_mask = torch.zeros((x.shape[0], x.shape[1]), dtype=torch.bool, device=dev)
-            else:
-                x = batch[0].to(dev)
-                padding_mask = batch[2].to(dev).bool()
-            recon, _ = model(x, padding_mask=padding_mask)
-
-        if x.ndim != 3 or x.shape[0] == 0:
-            raise ValueError(f"Expected sample_batch shape [B, N, D], got {tuple(x.shape)}")
-
-        valid_len = int((~padding_mask[0]).sum().item())
-        original = x[0, :valid_len].detach().cpu().numpy()  # [P, T]
-        reconstructed = recon[0, :valid_len].detach().cpu().numpy()  # [P, T]
-        original_trial.append(original)
-        recons_trial.append(reconstructed)
-
-    original_trial = np.array(original_trial, dtype=object)
-    recons_trial = np.array(recons_trial, dtype=object)
-
-    vol_idx = np.random.randint(0, len(recons_trial))
-    for token_idx in range(len(recons_trial[0, 0, :])):
-        plt.figure(figsize=(16, 6))
-        plt.scatter(np.arange(len(original_trial[vol_idx, :, 0])), original_trial[vol_idx, :, token_idx], label="Original", s=10)
-        plt.scatter(np.arange(len(recons_trial[vol_idx, :, 0])), recons_trial[vol_idx, :, token_idx], label="Recontructed", s=10)
-        plt.xlabel("Neuron")
-        plt.ylabel("Token Value")
-        plt.title(f"Token {token_idx} value of each neuron on a single cycle: before vs after reconstruction")
-        plt.legend()
-        plt.tight_layout()
-        plt.savefig(output_dir / f"vol_n_token_{token_idx}.png")
-        plt.close()
-
-    neuron = np.random.randint(0, len(recons_trial[0, :, 0]))
-    for token_idx in range(len(recons_trial[0, 0, :])):
-        plt.figure(figsize=(8, 3))
-        plt.plot(np.arange(len(original_trial[:, int(neuron), 0])), original_trial[:, int(neuron), token_idx], label="Original")
-        plt.plot(np.arange(len(recons_trial[:, int(neuron), 0])), recons_trial[:, int(neuron), token_idx], label="Recontructed")
-        plt.xlabel("Cycle n")
-        plt.ylabel("Token Value")
-        plt.title(f"Token {token_idx} of neuron {int(original_trial[0, int(neuron), 0])} during trial: before vs after reconstruction")
-        plt.legend()
-        plt.tight_layout()
-        plt.savefig(output_dir / f"neuron_n_token_{token_idx}.png")
-        plt.close()
-
-    with open(os.path.join(output_dir, 'history.json'), 'r') as file:
-        history = json.load(file)
-    epochs = [d["epoch"] for d in history]
-    train_loss = [d["train_loss"] for d in history]
-    val_loss = [d["val_loss"] for d in history]
-
-    train_loss[0] = None
-
-    plt.figure()
-    plt.plot(epochs, train_loss, label="Train Loss")
-    plt.plot(epochs, val_loss, label="Validation Loss")
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.title("Training and Validation Loss")
-    plt.legend()
-    plt.grid()
-    plt.savefig(os.path.join(output_dir, 'train_evo.png'))

@@ -101,6 +101,9 @@ def parse_neural_ae_experiment_config(config_path: Path) -> ExperimentConfig:
         poisson_log_input=bool(loss_cfg.get("poisson_log_input", train_cfg.get("poisson_log_input", True))),
         poisson_full=bool(loss_cfg.get("poisson_full", train_cfg.get("poisson_full", False))),
         poisson_eps=float(loss_cfg.get("poisson_eps", train_cfg.get("poisson_eps", 1e-8))),
+        loss_weight_id=float(loss_cfg.get("weight_id", 1.0)),
+        loss_weight_time=float(loss_cfg.get("weight_time", 1.0)),
+        loss_weight_rec=float(loss_cfg.get("weight_rec", 1.0)),
     )
 
     output_dir = resolve_repo_path(output_cfg.get("dir", "outputs/neural_autoencoder"))

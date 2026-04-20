@@ -21,11 +21,13 @@ from v1tovideo.neural_autoencoder import (
     evaluate_autoencoder,
     infer_batch_shape,
     save_checkpoint,
-    save_reconstruction_plots,
-    save_reconstruction_artifacts,
+
     train_autoencoder,
 )
-
+from v1tovideo.neural_autoencoder.trainer_sc import (
+    save_reconstruction_plots,
+    save_reconstruction_artifacts,
+)
 
 DEFAULT_CONFIG_PATH = REPO_ROOT / "scripts" / "configs" / "neural_ae_experiment.toml"
 LOGGER = logging.getLogger(__name__)

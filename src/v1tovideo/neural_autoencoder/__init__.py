@@ -11,9 +11,11 @@ from .trainer import (
     TrainConfig,
     evaluate_autoencoder,
     save_checkpoint,
+    train_autoencoder,
+)
+from .trainer_sc import (
     save_reconstruction_plots,
     save_reconstruction_artifacts,
-    train_autoencoder,
 )
 
 __all__ = [

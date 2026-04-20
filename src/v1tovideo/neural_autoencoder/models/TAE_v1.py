@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import torch
 from torch import nn
+import numpy as np
 
 
-class TAE_v2(nn.Module):
+class TAE_v1(nn.Module):
     """Starter template for custom neural autoencoder experiments.
 
     Expected input shape: [batch, num_tokens, token_dim]
@@ -31,8 +32,8 @@ class TAE_v2(nn.Module):
         self._last_num_tokens: int | None = None
 
         self.id_embedding = nn.Embedding(num_tokens, input_dim)
-
-        self.input_proj = nn.Linear(token_dim - 1, input_dim)
+        self.time_proj = nn.Linear(1, input_dim)
+        self.rec_proj = nn.Linear(1, input_dim)
 
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=input_dim,
@@ -41,12 +42,12 @@ class TAE_v2(nn.Module):
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
-        self.pool_queries = nn.Parameter(torch.randn(1, latent_num_tokens, input_dim))
-        self.pool_attn = nn.MultiheadAttention(
-            embed_dim=input_dim,
-            num_heads=nhead,
-            batch_first=True,
-        )
+        # self.pool_queries = nn.Parameter(torch.randn(1, latent_num_tokens, input_dim))
+        # self.pool_attn = nn.MultiheadAttention(
+        #     embed_dim=input_dim,
+        #     num_heads=nhead,
+        #     batch_first=True,
+        # )
 
         self.to_latent = nn.Sequential(
             nn.LayerNorm(input_dim),
@@ -65,11 +66,11 @@ class TAE_v2(nn.Module):
         )
         self.decoder = nn.TransformerEncoder(decoder_layer, num_layers=num_layers)
 
-        self.output_id = nn.Linear(input_dim, 1)
+        self.id_head = nn.Linear(latent_dim, num_tokens)
+        self.time_head = nn.Linear(latent_dim, 1)       
+        self.rec_head = nn.Linear(latent_dim, 1)        
 
-        self.output_other = nn.Linear(input_dim, token_dim - 1)
-
-    def encode(self, x: torch.Tensor, padding_mask: torch.Tensor | None = None) -> torch.Tensor:
+    def encode_sc(self, x, padding_mask):
         if x.ndim != 3:
             raise ValueError(f"Expected input shape [B, N, D], got {tuple(x.shape)}")
         if int(x.shape[2]) != self.token_dim:
@@ -81,29 +82,34 @@ class TAE_v2(nn.Module):
 
         if padding_mask is None:
             padding_mask = torch.zeros((x.shape[0], x.shape[1]), dtype=torch.bool, device=x.device)
+            
+    def encode(self, x: torch.Tensor, padding_mask: torch.Tensor | None = None) -> torch.Tensor:
+        self.encode_sc(x, padding_mask)
+
         self._last_num_tokens = int(x.shape[1])
-        
+
         id = x[..., 0].long()
         time = x[..., 1].unsqueeze(-1)
         recording = x[..., 2].unsqueeze(-1)
 
-        id_emb = self.id_embedding(id)
-        other = torch.cat([time, recording], dim=-1)
-        other = self.input_proj(other)
-        x = id_emb + other
+
+        id_emb = self.id_embedding(id)  # A dictionary where each token has a trainable vector to identify it
+        t_proj = self.time_proj(time)   # Project them into the same embedding space
+        rec_proj = self.rec_proj(recording) # You want each token to become a single vector that encodes:what (id)when (time)value (recording)
+
+        x = id_emb + t_proj + rec_proj  # The model learns to encode each component so they remain recoverable after summation.
 
         x = self.encoder(x, src_key_padding_mask=padding_mask)
+        # queries = self.pool_queries.repeat(x.shape[0], 1, 1)
 
-        queries = self.pool_queries.repeat(x.shape[0], 1, 1)
+        # pooled, _ = self.pool_attn(
+        #     query=queries,
+        #     key=x,
+        #     value=x,
+        #     key_padding_mask=padding_mask,
+        # )
 
-        pooled, _ = self.pool_attn(
-            query=queries,
-            key=x,
-            value=x,
-            key_padding_mask=padding_mask,
-        )
-
-        z = self.to_latent(pooled)
+        z = self.to_latent(x)
         return z
 
     def decode(
@@ -112,26 +118,15 @@ class TAE_v2(nn.Module):
         padding_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
 
-        target_tokens = self.num_tokens
-
-        B, M, _ = z.shape
-
-        memory = self.from_latent(z)
-
-        queries = torch.zeros(B, target_tokens, self.input_dim, device=z.device)
-
-        x, _ = self.pool_attn(
-            query=queries,
-            key=memory,
-            value=memory,
-        )
+        x = self.from_latent(z)
 
         x = self.decoder(x, src_key_padding_mask=padding_mask)
 
-        id_logits = self.output_id(x)
-        other = self.output_other(x)
+        id_logits = self.id_head(x)         # classification over IDs
+        time_pred = self.time_head(x)       # regression
+        rec_pred = self.rec_head(x)         # regression
 
-        return torch.cat([id_logits, other], dim=-1)
+        return id_logits, time_pred, rec_pred
 
     def forward(
         self,
@@ -139,5 +134,23 @@ class TAE_v2(nn.Module):
         padding_mask: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         latents = self.encode(x, padding_mask=padding_mask)
-        reconstruction = self.decode(latents, padding_mask=padding_mask)
-        return reconstruction, latents
+        id_logits, time_pred, rec_pred = self.decode(latents, padding_mask=padding_mask)
+        return id_logits, time_pred, rec_pred, latents
+
+    @torch.no_grad()
+    def predict(
+        self,
+        x: torch.Tensor,
+        padding_mask: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        self.eval()
+        dtype = x.dtype
+        out = self(x)
+        id_logits, time_pred, rec_pred, _ = out
+
+        id_pred = id_logits.argmax(dim=-1).to(dtype=dtype)
+        preds = torch.stack(
+            (id_pred, time_pred.squeeze(-1).to(dtype=dtype), rec_pred.squeeze(-1).to(dtype=dtype)),
+            dim=-1,
+        )
+        return preds.masked_fill(padding_mask.unsqueeze(-1), 0.0)
