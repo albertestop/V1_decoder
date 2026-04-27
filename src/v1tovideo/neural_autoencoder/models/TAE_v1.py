@@ -35,6 +35,13 @@ class TAE_v1(nn.Module):
         self.time_proj = nn.Linear(1, input_dim)
         self.rec_proj = nn.Linear(1, input_dim)
 
+        self.fusion_proj = nn.Sequential(
+            nn.LayerNorm(3 * input_dim),
+            nn.Linear(3 * input_dim, input_dim),
+            # nn.GELU(),
+            # nn.Linear(d_model, d_model),
+        )
+
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=input_dim,
             nhead=nhead,
@@ -97,7 +104,8 @@ class TAE_v1(nn.Module):
         t_proj = self.time_proj(time)   # Project them into the same embedding space
         rec_proj = self.rec_proj(recording) # You want each token to become a single vector that encodes:what (id)when (time)value (recording)
 
-        x = id_emb + t_proj + rec_proj  # The model learns to encode each component so they remain recoverable after summation.
+        x = torch.cat([id_emb, t_proj, rec_proj], dim=-1)
+        x = self.fusion_proj(x)
 
         x = self.encoder(x, src_key_padding_mask=padding_mask)
         # queries = self.pool_queries.repeat(x.shape[0], 1, 1)

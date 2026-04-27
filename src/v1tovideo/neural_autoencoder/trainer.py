@@ -41,6 +41,9 @@ def _resolve_device(device: str) -> torch.device:
 def _lightning_trainer_kwargs(device: str) -> dict[str, Any]:
     resolved = _resolve_device(device)
     if resolved.type == "cuda":
+        # Respect an explicit CUDA index from config (e.g. "cuda:1").
+        if resolved.index is not None:
+            return {"accelerator": "gpu", "devices": [resolved.index]}
         return {"accelerator": "gpu", "devices": 1}
     if resolved.type == "mps":
         return {"accelerator": "mps", "devices": 1}
@@ -266,4 +269,3 @@ def evaluate_autoencoder(
 def save_checkpoint(model: nn.Module, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), path)
-
