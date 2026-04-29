@@ -23,8 +23,8 @@ dropout = 0.1
 # Used only when architecture = "custom"
 target = "v1tovideo.neural_autoencoder.models:TAE_v0"
 input_dim = 32
-latent_dim = 32
-latent_num_tokens = 512
+latent_dim = 16
+latent_num_tokens = 5443
 
 [train]
 epochs = 15
@@ -43,7 +43,7 @@ weight_rec = 1.0
 # id supports: "cross_entropy"
 name_id = "cross_entropy"
 # time/rec support: "masked_mse", "masked_mae", "poisson_nll"
-name_time = "masked_mae"
+name_time = "masked_mse"
 name_rec = "masked_mse"
 # PoissonNLLLoss options (used only when name = "poisson_nll")
 poisson_log_input = true

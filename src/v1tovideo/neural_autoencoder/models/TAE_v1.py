@@ -73,9 +73,9 @@ class TAE_v1(nn.Module):
         )
         self.decoder = nn.TransformerEncoder(decoder_layer, num_layers=num_layers)
 
-        self.id_head = nn.Linear(latent_dim, num_tokens)
-        self.time_head = nn.Linear(latent_dim, 1)       
-        self.rec_head = nn.Linear(latent_dim, 1)        
+        self.id_head = nn.Linear(input_dim, num_tokens)
+        self.time_head = nn.Linear(input_dim, 1)       
+        self.rec_head = nn.Linear(input_dim, 1)        
 
     def encode_sc(self, x, padding_mask):
         if x.ndim != 3:

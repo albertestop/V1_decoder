@@ -50,6 +50,11 @@ def main() -> None:
     LOGGER.info("Using config: %s", config_path)
     config = parse_neural_ae_experiment_config(config_path)
 
+    output_dir = config.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    shutil.copy(DEFAULT_CONFIG_PATH, output_dir / "config.toml")
+
     LOGGER.info("Preparing dataset")
     train_loader, val_loader, dataset, dataset_map, val_map_idx = build_dataloaders(config.data)
     LOGGER.info("Dataset loaded | samples=%d | shape=%s", len(dataset), getattr(dataset, "shape", None))
@@ -86,9 +91,6 @@ def main() -> None:
 
     eval_metrics = evaluate_autoencoder(model=model, dataloader=val_loader, device=config.train.device)
 
-    output_dir = config.output_dir
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     checkpoint_path = output_dir / "model.pt"
     save_checkpoint(model, checkpoint_path)
 
@@ -112,8 +114,6 @@ def main() -> None:
 
     with (output_dir / "summary.json").open("w", encoding="utf-8") as fp:
         json.dump(summary, fp, indent=2)
-
-    shutil.copy(DEFAULT_CONFIG_PATH, output_dir / "config.toml")
 
     save_reconstruction_artifacts(
         model=model,

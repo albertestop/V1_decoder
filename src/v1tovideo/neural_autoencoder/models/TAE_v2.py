@@ -27,7 +27,7 @@ class TAE_v0(nn.Module):
         self.num_tokens = int(num_tokens) if num_tokens is not None else None
         self.latent_dim = int(latent_dim)
         self.input_dim = int(input_dim)
-        self.laten_num_tokens = int(latent_num_tokens)
+        self.latent_num_tokens = int(latent_num_tokens)
 
         self._last_num_tokens: int | None = None
 
@@ -42,13 +42,6 @@ class TAE_v0(nn.Module):
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
-        # self.pool_queries = nn.Parameter(torch.randn(1, latent_num_tokens, input_dim))
-        # self.pool_attn = nn.MultiheadAttention(
-        #     embed_dim=input_dim,
-        #     num_heads=nhead,
-        #     batch_first=True,
-        # )
-
         self.to_latent = nn.Sequential(
             nn.LayerNorm(input_dim),
             nn.Linear(input_dim, latent_dim),
@@ -58,6 +51,9 @@ class TAE_v0(nn.Module):
             nn.GELU(),
             nn.Linear(input_dim, input_dim),
         )
+
+        self.token_queries = nn.Parameter(torch.randn(1, num_tokens, latent_dim))
+        self.token_uncompress = nn.MultiheadAttention(latent_dim, nhead, batch_first=True)
 
         decoder_layer = nn.TransformerEncoderLayer(
             d_model=input_dim,
@@ -100,16 +96,11 @@ class TAE_v0(nn.Module):
         x = id_emb + t_proj + rec_proj  # The model learns to encode each component so they remain recoverable after summation.
 
         x = self.encoder(x, src_key_padding_mask=padding_mask)
-        # queries = self.pool_queries.repeat(x.shape[0], 1, 1)
-
-        # pooled, _ = self.pool_attn(
-        #     query=queries,
-        #     key=x,
-        #     value=x,
-        #     key_padding_mask=padding_mask,
-        # )
 
         z = self.to_latent(x)
+
+        z = z[:, :self.latent_num_tokens, :]
+        
         return z
 
     def decode(
@@ -118,7 +109,11 @@ class TAE_v0(nn.Module):
         padding_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
 
-        x = self.from_latent(z)
+        q = self.token_queries[:, :self.num_tokens, :].expand(z.size(0), -1, -1)   # [B, N, latent_dim]
+        z_full, _ = self.token_uncompress(query=q, key=z, value=z)    # [B, N, latent_dim]
+        x = self.from_latent(z_full)  
+
+        x = self.from_latent(x)
 
         x = self.decoder(x, src_key_padding_mask=padding_mask)
 
