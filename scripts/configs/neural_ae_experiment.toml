@@ -21,9 +21,9 @@ dropout = 0.1
 
 [custom_model]
 # Used only when architecture = "custom"
-target = "v1tovideo.neural_autoencoder.models:TAE_v1"
-latent_dim = 32
+target = "v1tovideo.neural_autoencoder.models:TAE_v0"
 input_dim = 32
+latent_dim = 32
 latent_num_tokens = 512
 
 [train]
@@ -34,12 +34,17 @@ grad_clip_norm = 1.0
 device = "cuda:1"
 
 [train.loss]
-# Supported: "masked_mse", "poisson_nll", "combined"
+# Supported: "masked_mse", "masked_mae", "poisson_nll", "combined"
 name = "combined"
 # Combined options (used only when name = "combined")
 weight_id = 1.0
 weight_time = 1.0
 weight_rec = 1.0
+# id supports: "cross_entropy"
+name_id = "cross_entropy"
+# time/rec support: "masked_mse", "masked_mae", "poisson_nll"
+name_time = "masked_mae"
+name_rec = "masked_mse"
 # PoissonNLLLoss options (used only when name = "poisson_nll")
 poisson_log_input = true
 poisson_full = false

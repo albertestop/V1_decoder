@@ -104,6 +104,9 @@ def parse_neural_ae_experiment_config(config_path: Path) -> ExperimentConfig:
         loss_weight_id=float(loss_cfg.get("weight_id", 1.0)),
         loss_weight_time=float(loss_cfg.get("weight_time", 1.0)),
         loss_weight_rec=float(loss_cfg.get("weight_rec", 1.0)),
+        combined_loss_name_id=str(loss_cfg.get("name_id", "cross_entropy")),
+        combined_loss_name_time=str(loss_cfg.get("name_time", "masked_mse")),
+        combined_loss_name_rec=str(loss_cfg.get("name_rec", "masked_mse")),
     )
 
     output_dir = resolve_repo_path(output_cfg.get("dir", "outputs/neural_autoencoder"))

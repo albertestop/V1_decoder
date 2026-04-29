@@ -30,6 +30,9 @@ class TrainConfig:
     loss_weight_id: float = 1.0
     loss_weight_time: float = 1.0
     loss_weight_rec: float = 1.0
+    combined_loss_name_id: str = "cross_entropy"
+    combined_loss_name_time: str = "masked_mse"
+    combined_loss_name_rec: str = "masked_mse"
 
 
 def _resolve_device(device: str) -> torch.device:
@@ -57,9 +60,27 @@ class AutoencoderLightningModule(pl.LightningModule):
         self.save_hyperparameters(ignore=["model"])
         self.config = config
         self._loss_name = str(config.loss_name).strip().lower()
-        supported_losses = {"masked_mse", "poisson_nll", "combined"}
+        supported_losses = {"masked_mse", "masked_mae", "poisson_nll", "combined"}
         if self._loss_name not in supported_losses:
             raise ValueError(f"Unsupported loss_name '{config.loss_name}'. Supported: {sorted(supported_losses)}")
+        self._combined_loss_names = {
+            "id": str(config.combined_loss_name_id).strip().lower(),
+            "time": str(config.combined_loss_name_time).strip().lower(),
+            "rec": str(config.combined_loss_name_rec).strip().lower(),
+        }
+        supported_id_losses = {"cross_entropy"}
+        supported_value_losses = {"masked_mse", "masked_mae", "poisson_nll"}
+        if self._combined_loss_names["id"] not in supported_id_losses:
+            raise ValueError(
+                "Unsupported combined id loss "
+                f"'{config.combined_loss_name_id}'. Supported: {sorted(supported_id_losses)}"
+            )
+        for key in ("time", "rec"):
+            if self._combined_loss_names[key] not in supported_value_losses:
+                raise ValueError(
+                    f"Unsupported combined {key} loss '{self._combined_loss_names[key]}'. "
+                    f"Supported: {sorted(supported_value_losses)}"
+                )
         self._loss_weights = (
             float(config.loss_weight_id),
             float(config.loss_weight_time),
@@ -120,14 +141,39 @@ class AutoencoderLightningModule(pl.LightningModule):
             ignore_index=ignore_index,
         )
 
-        valid_float = valid.to(dtype=x.dtype)
-        denom = valid_float.sum().clamp_min(1.0)
-        loss_time = (((time_pred.squeeze(-1) - time_target) ** 2) * valid_float).sum() / denom
-        loss_rec = (((rec_pred.squeeze(-1) - rec_target) ** 2) * valid_float).sum() / denom
+        loss_time = self._masked_value_loss(
+            time_pred.squeeze(-1),
+            time_target,
+            padding_mask,
+            self._combined_loss_names["time"],
+        )
+        loss_rec = self._masked_value_loss(
+            rec_pred.squeeze(-1),
+            rec_target,
+            padding_mask,
+            self._combined_loss_names["rec"],
+        )
 
         w_id, w_time, w_rec = self._loss_weights
         total = (w_id * loss_id) + (w_time * loss_time) + (w_rec * loss_rec)
         return total, {"loss_id": loss_id, "loss_time": loss_time, "loss_rec": loss_rec}
+
+    def _masked_value_loss(
+        self,
+        pred: torch.Tensor,
+        target: torch.Tensor,
+        padding_mask: torch.Tensor,
+        loss_name: str,
+    ) -> torch.Tensor:
+        pred_3d = pred.unsqueeze(-1)
+        target_3d = target.unsqueeze(-1)
+        if loss_name == "masked_mse":
+            return self._masked_mse(pred_3d, target_3d, padding_mask)
+        if loss_name == "masked_mae":
+            return self._masked_mae(pred_3d, target_3d, padding_mask)
+        if loss_name == "poisson_nll":
+            return self._masked_poisson_nll(pred_3d, target_3d, padding_mask)
+        raise ValueError(f"Unsupported value loss '{loss_name}'")
 
     def _forward_outputs(self, x: torch.Tensor, padding_mask: torch.Tensor) -> dict[str, torch.Tensor]:
         out = self.model(x, padding_mask=padding_mask)
@@ -151,6 +197,8 @@ class AutoencoderLightningModule(pl.LightningModule):
     def _compute_loss(self, outputs: torch.Tensor, x: torch.Tensor, padding_mask: torch.Tensor) -> torch.Tensor:
         if self._loss_name == "masked_mse":
             return self._masked_mse(outputs["recon"], x, padding_mask)
+        if self._loss_name == "masked_mae":
+            return self._masked_mae(outputs["recon"], x, padding_mask)
         if self._loss_name == "poisson_nll":
             return self._masked_poisson_nll(outputs["recon"], x, padding_mask)
         if self._loss_name == "combined":
