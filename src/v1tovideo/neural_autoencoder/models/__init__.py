@@ -7,16 +7,18 @@ from .core import (
 from .loading import build_model_from_target
 from .TAE_v0 import TAE_v0
 from .TAE_v1 import TAE_v1
+from .TAE_v2 import TAE_v2
+from .PAE_v0 import PAE_v0
 
 
 __all__ = [
     "BaseNeuralAutoencoder",
     "MLPNeuralAutoencoder",
     "PerceiverAE",
-    "TAE",
     "TAE_v0",
     "TAE_v1",
-    "PAE",
+    "TAE_v2",
+    "PAE_v0",
     "TemplateNeuralAutoencoder",
     "TransformerNeuralAutoencoder",
     "build_model",
