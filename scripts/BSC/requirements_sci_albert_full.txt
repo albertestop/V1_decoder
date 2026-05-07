@@ -1,0 +1,9 @@
+diffusers==0.33.1
+lightning==2.6.1
+matplotlib==3.9.1
+numpy==1.24.3
+Pillow==10.2.0
+scikit-image==0.26.0
+tomli
+torch==2.4.1
+torchvision==0.19.1

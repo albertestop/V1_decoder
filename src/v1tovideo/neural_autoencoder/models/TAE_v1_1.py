@@ -5,7 +5,7 @@ from torch import nn
 import numpy as np
 
 
-class PAE_v0(nn.Module):
+class TAE_v1_1(nn.Module):
     """Starter template for custom neural autoencoder experiments.
 
     Expected input shape: [batch, num_tokens, token_dim]
@@ -27,13 +27,20 @@ class PAE_v0(nn.Module):
         self.num_tokens = int(num_tokens) if num_tokens is not None else None
         self.latent_dim = int(latent_dim)
         self.input_dim = int(input_dim)
-        self.latent_num_tokens = int(latent_num_tokens)
+        self.laten_num_tokens = int(latent_num_tokens)
 
         self._last_num_tokens: int | None = None
 
         self.id_embedding = nn.Embedding(num_tokens, input_dim)
         self.time_proj = nn.Linear(1, input_dim)
         self.rec_proj = nn.Linear(1, input_dim)
+
+        self.fusion_proj = nn.Sequential(
+            nn.LayerNorm(3 * input_dim),
+            nn.Linear(3 * input_dim, input_dim),
+            nn.GELU(),
+            nn.Linear(input_dim, input_dim),
+        )
 
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=input_dim,
@@ -46,13 +53,6 @@ class PAE_v0(nn.Module):
             nn.LayerNorm(input_dim),
             nn.Linear(input_dim, latent_dim),
         )
-
-        self.latent_queries = nn.Parameter(torch.randn(1, self.latent_num_tokens, self.latent_dim))
-        self.token_compress = nn.MultiheadAttention(self.latent_dim, nhead, batch_first=True)
-
-        self.decode_queries = nn.Parameter(torch.randn(1, self.num_tokens, self.latent_dim))
-        self.token_uncompress = nn.MultiheadAttention(self.latent_dim, nhead, batch_first=True)
-
         self.from_latent = nn.Sequential(
             nn.Linear(latent_dim, input_dim),
             nn.GELU(),
@@ -97,17 +97,12 @@ class PAE_v0(nn.Module):
         t_proj = self.time_proj(time)   # Project them into the same embedding space
         rec_proj = self.rec_proj(recording) # You want each token to become a single vector that encodes:what (id)when (time)value (recording)
 
-        x = id_emb + t_proj + rec_proj  # The model learns to encode each component so they remain recoverable after summation.
+        x = torch.cat([id_emb, t_proj, rec_proj], dim=-1)
+        x = self.fusion_proj(x)
 
         x = self.encoder(x, src_key_padding_mask=padding_mask)
 
         z = self.to_latent(x)
-
-        q = self.latent_queries.expand(z.size(0), -1, -1)  # [B, L, latent_dim], L=latent_num_tokens
-        z, _ = self.token_compress(
-            query=q, key=z, value=z,
-            key_padding_mask=padding_mask
-        )
         return z
 
     def decode(
@@ -115,9 +110,6 @@ class PAE_v0(nn.Module):
         z: torch.Tensor,
         padding_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
-
-        q_dec = self.decode_queries[:, :self.num_tokens, :].expand(z.size(0), -1, -1)
-        z, _ = self.token_uncompress(query=q_dec, key=z, value=z)  # [B, N, latent_dim]
 
         x = self.from_latent(z)
 

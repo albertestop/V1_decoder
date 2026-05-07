@@ -37,9 +37,7 @@ class TAE_v1(nn.Module):
 
         self.fusion_proj = nn.Sequential(
             nn.LayerNorm(3 * input_dim),
-            nn.Linear(3 * input_dim, input_dim),
-            # nn.GELU(),
-            # nn.Linear(d_model, d_model),
+            nn.Linear(3 * input_dim, input_dim)
         )
 
         encoder_layer = nn.TransformerEncoderLayer(
@@ -48,13 +46,6 @@ class TAE_v1(nn.Module):
             batch_first=True,
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-
-        # self.pool_queries = nn.Parameter(torch.randn(1, latent_num_tokens, input_dim))
-        # self.pool_attn = nn.MultiheadAttention(
-        #     embed_dim=input_dim,
-        #     num_heads=nhead,
-        #     batch_first=True,
-        # )
 
         self.to_latent = nn.Sequential(
             nn.LayerNorm(input_dim),
@@ -108,14 +99,6 @@ class TAE_v1(nn.Module):
         x = self.fusion_proj(x)
 
         x = self.encoder(x, src_key_padding_mask=padding_mask)
-        # queries = self.pool_queries.repeat(x.shape[0], 1, 1)
-
-        # pooled, _ = self.pool_attn(
-        #     query=queries,
-        #     key=x,
-        #     value=x,
-        #     key_padding_mask=padding_mask,
-        # )
 
         z = self.to_latent(x)
         return z

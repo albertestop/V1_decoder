@@ -1,18 +1,15 @@
 [data]
-data_root_path = "/home/albertestop/data/processed_data/tba"
+data_root_path = "/gpfs/projects/uab103/uab020077/data/processed_data/tba"
 dataset_id = "2025-07-04_04_ESPM154_vol_000"
-
 batch_size = 8
 val_split = 0.1
 shuffle_train = true
 num_workers = 16
 pin_memory = true
 drop_last = false
-
 architecture = "custom"
 
 [built_in_model]
-# Used when architecture is one of: "mlp", "transformer"
 latent_dim = 256
 hidden_dim = 512
 num_layers = 4
@@ -20,7 +17,6 @@ num_heads = 8
 dropout = 0.1
 
 [custom_model]
-# Used only when architecture = "custom"
 target = "v1tovideo.neural_autoencoder.models:TAE_v1_1"
 input_dim = 32
 latent_dim = 32
@@ -28,27 +24,22 @@ latent_num_tokens = 5443
 
 [train]
 epochs = 2
-learning_rate = 1e-4
-weight_decay = 1e-4
+learning_rate = 0.0001
+weight_decay = 0.0001
 grad_clip_norm = 1.0
-device = "cuda:1"
+device = "cuda:0"
 
 [train.loss]
-# Supported: "masked_mse", "masked_mae", "poisson_nll", "combined"
 name = "combined"
-# Combined options (used only when name = "combined")
 weight_id = 1.0
 weight_time = 1.0
 weight_rec = 1.0
-# id supports: "cross_entropy"
 name_id = "cross_entropy"
-# time/rec support: "masked_mse", "masked_mae", "poisson_nll"
 name_time = "masked_mse"
 name_rec = "masked_mse"
-# PoissonNLLLoss options (used only when name = "poisson_nll")
 poisson_log_input = true
 poisson_full = false
-poisson_eps = 1e-8
+poisson_eps = 1e-08
 
 [output]
-dir = "outputs/neural_autoencoder/default_run"
+dir = "/gpfs/projects/uab103/uab020077/transformer_arch/transformer_arch_0/transformer_arch/outputs/neural_autoencoder/run_12"

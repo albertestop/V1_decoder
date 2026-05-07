@@ -27,7 +27,7 @@ class TAE_v0(nn.Module):
         self.num_tokens = int(num_tokens) if num_tokens is not None else None
         self.latent_dim = int(latent_dim)
         self.input_dim = int(input_dim)
-        self.laten_num_tokens = int(latent_num_tokens)
+        self.latent_num_tokens = int(latent_num_tokens)
 
         self._last_num_tokens: int | None = None
 
