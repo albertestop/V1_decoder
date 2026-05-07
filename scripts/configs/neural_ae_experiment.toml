@@ -15,8 +15,8 @@ architecture = "custom"
 # Used when architecture is one of: "mlp", "transformer"
 latent_dim = 256
 hidden_dim = 512
-num_layers = 4
-num_heads = 8
+num_layers = 16
+num_heads = 32
 dropout = 0.1
 
 [custom_model]
@@ -27,7 +27,7 @@ latent_dim = 32
 latent_num_tokens = 5443
 
 [train]
-epochs = 2
+epochs = 20
 learning_rate = 1e-4
 weight_decay = 1e-4
 grad_clip_norm = 1.0

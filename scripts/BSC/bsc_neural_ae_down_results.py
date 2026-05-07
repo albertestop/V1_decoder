@@ -2,17 +2,9 @@
 from __future__ import annotations
 
 import re
-import shutil
 import subprocess
 import sys
-import time
 from pathlib import Path
-from typing import Any
-
-try:
-    import tomllib  # Python 3.11+
-except ModuleNotFoundError:  # pragma: no cover
-    import tomli as tomllib  # type: ignore
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -35,20 +27,22 @@ def run_cmd(cmd: list[str], *, capture: bool = False) -> subprocess.CompletedPro
     return subprocess.run(cmd, text=True, check=True, capture_output=capture)
 
 
-def reserve_next_local_run_dir(base_dir: Path) -> Path:
-    base_dir.mkdir(parents=True, exist_ok=True)
-    while True:
-        max_idx = -1
-        for child in base_dir.iterdir():
-            match = re.fullmatch(r"run_(\d+)", child.name)
-            if match:
-                max_idx = max(max_idx, int(match.group(1)))
-        candidate = base_dir / f"run_{max_idx + 1}"
-        try:
-            candidate.mkdir(parents=False, exist_ok=False)
-            return candidate
-        except FileExistsError:
-            continue
+def list_remote_run_dirs(ssh_transfer: str, remote_output_base: Path) -> list[tuple[int, str]]:
+    cmd = (
+        f"bash -lc \""
+        f"if [ -d '{remote_output_base}' ]; then "
+        f"find '{remote_output_base}' -maxdepth 1 -mindepth 1 -type d -name 'run_*' -printf '%f\\n'; "
+        f"fi\""
+    )
+    result = run_cmd(["ssh", ssh_transfer, cmd], capture=True)
+    runs: list[tuple[int, str]] = []
+    for raw in result.stdout.splitlines():
+        name = raw.strip()
+        match = re.fullmatch(r"run_(\d+)", name)
+        if match:
+            runs.append((int(match.group(1)), name))
+    runs.sort(key=lambda x: x[0])
+    return runs
 
 
 def main() -> None:
@@ -56,32 +50,32 @@ def main() -> None:
     conf = load_conf(conf_path)
 
     ssh_transfer = conf["SSH_TRANSFER"]
-    remote_root = Path(conf["REMOTE_ROOT"])
+    for i in range(10):
+        remote_root = Path("/gpfs/projects/uab103/uab020077/transformer_arch/transformer_arch_" + str(i) + "/transformer_arch")
+        min_run = int(conf.get("DOWNLOAD_MIN_RUN", "0"))
 
-    local_config = (REPO_ROOT / conf["LOCAL_EXPERIMENT_CONFIG"]).resolve()
+        local_output_base = REPO_ROOT / "outputs" / "neural_autoencoder"
+        remote_output_base = remote_root / "outputs" / "neural_autoencoder"
+        local_output_base.mkdir(parents=True, exist_ok=True)
 
-    with local_config.open("rb") as fh:
-        experiment_cfg = tomllib.load(fh)
+        remote_runs = list_remote_run_dirs(ssh_transfer, remote_output_base)
+        selected_runs = [(idx, name) for idx, name in remote_runs if idx >= min_run]
 
-    dataset_id = str(experiment_cfg["data"]["dataset_id"])
-    local_data_root = Path(str(experiment_cfg["data"]["data_root_path"]))
-    local_dataset_dir = local_data_root / dataset_id
+        if not selected_runs:
+            print(f"No remote runs found with index >= {min_run} in {remote_output_base}")
+            return
 
-    if not local_dataset_dir.exists():
-        raise FileNotFoundError(f"Local dataset not found: {local_dataset_dir}")
+        print(f"Found {len(selected_runs)} remote run(s) with index >= {min_run}")
 
-    local_output_base = REPO_ROOT / "outputs" / "neural_autoencoder"
-    local_run_dir = reserve_next_local_run_dir(local_output_base)
-    remote_run_dir = remote_root / "outputs" / "neural_autoencoder" / local_run_dir.name
+        for _idx, run_name in selected_runs:
+            remote_run_dir = remote_output_base / run_name
+            local_run_dir = local_output_base / run_name
 
-    print(f"Local run directory: {local_run_dir}")
-    print(f"Remote run directory: {remote_run_dir}")
-
-    run_cmd(["scp", "-r", f"{ssh_transfer}:{remote_run_dir}/.", str(local_run_dir)])
-    run_cmd(["ssh", ssh_transfer, f"rm -rf '{remote_run_dir}'"])
-
-    print(f"Results downloaded to: {local_run_dir}")
-    print(f"Remote output removed: {remote_run_dir}")
+            print(f"Downloading {run_name} -> {local_run_dir}")
+            local_run_dir.mkdir(parents=True, exist_ok=True)
+            run_cmd(["scp", "-r", f"{ssh_transfer}:{remote_run_dir}/.", str(local_run_dir)])
+            run_cmd(["ssh", ssh_transfer, f"rm -rf '{remote_run_dir}'"])
+            print(f"Downloaded and removed remote: {run_name}")
 
 
 
