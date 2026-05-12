@@ -23,7 +23,6 @@ def load_conf(path: Path) -> dict[str, str]:
 
 
 def run_cmd(cmd: list[str], *, capture: bool = False) -> subprocess.CompletedProcess[str]:
-    print("+", " ".join(cmd))
     return subprocess.run(cmd, text=True, check=True, capture_output=capture)
 
 
@@ -50,7 +49,7 @@ def main() -> None:
     conf = load_conf(conf_path)
 
     ssh_transfer = conf["SSH_TRANSFER"]
-    for i in range(10):
+    for i in range(30):
         remote_root = Path("/gpfs/projects/uab103/uab020077/transformer_arch/transformer_arch_" + str(i) + "/transformer_arch")
         min_run = int(conf.get("DOWNLOAD_MIN_RUN", "0"))
 
@@ -62,8 +61,7 @@ def main() -> None:
         selected_runs = [(idx, name) for idx, name in remote_runs if idx >= min_run]
 
         if not selected_runs:
-            print(f"No remote runs found with index >= {min_run} in {remote_output_base}")
-            return
+            continue
 
         print(f"Found {len(selected_runs)} remote run(s) with index >= {min_run}")
 

@@ -38,8 +38,8 @@ class TAE_v3(nn.Module):
         self.fusion_proj = nn.Sequential(
             nn.LayerNorm(3 * input_dim),
             nn.Linear(3 * input_dim, input_dim),
-            # nn.GELU(),
-            # nn.Linear(d_model, d_model),
+            nn.GELU(),
+            nn.Linear(input_dim, input_dim),
         )
 
         encoder_layer = nn.TransformerEncoderLayer(
@@ -124,7 +124,7 @@ class TAE_v3(nn.Module):
         padding_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
 
-        readdition = torch.zeros((z.shape[0], self.num_tokens - self.latent_num_tokens, self.latent_dim), device=z.device)
+        readdition = nn.Parameter(torch.randn((z.shape[0], self.num_tokens - self.latent_num_tokens, self.latent_dim), device=z.device))
         readdition = self.readd(readdition)
         z = torch.concatenate([z, readdition], axis=1)
 

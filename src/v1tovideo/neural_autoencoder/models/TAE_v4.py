@@ -4,8 +4,45 @@ import torch
 from torch import nn
 import numpy as np
 
+class CrossAttentionBlock(nn.Module):
+    def __init__(self, dim, nhead):
+        super().__init__()
 
-class TAE_v1_1(nn.Module):
+        self.attn = nn.MultiheadAttention(
+            embed_dim=dim,
+            num_heads=nhead,
+            batch_first=True,
+        )
+
+        self.norm1 = nn.LayerNorm(dim)
+
+        self.ff = nn.Sequential(
+            nn.Linear(dim, 4 * dim),
+            nn.GELU(),
+            nn.Linear(4 * dim, dim),
+        )
+
+        self.norm2 = nn.LayerNorm(dim)
+
+    def forward(self, query, key_value, key_padding_mask=None):
+
+        attn_out, _ = self.attn(
+            query=query,
+            key=key_value,
+            value=key_value,
+            key_padding_mask=key_padding_mask,
+        )
+
+        x = self.norm1(query + attn_out)
+
+        ff_out = self.ff(x)
+
+        x = self.norm2(x + ff_out)
+
+        return x
+
+
+class TAE_v4(nn.Module):
     """Starter template for custom neural autoencoder experiments.
 
     Expected input shape: [batch, num_tokens, token_dim]
@@ -29,17 +66,23 @@ class TAE_v1_1(nn.Module):
         self.input_dim = int(input_dim)
         self.laten_num_tokens = int(latent_num_tokens)
 
-        self._last_num_tokens: int | None = None
-
         self.id_embedding = nn.Embedding(num_tokens, input_dim)
-        self.time_proj = nn.Linear(1, input_dim)
-        self.rec_proj = nn.Linear(1, input_dim)
+        self.time_proj = nn.Sequential(
+            nn.Linear(1, input_dim),
+            nn.GELU(),
+            nn.Linear(input_dim, input_dim),
+        )
+        self.rec_proj = nn.Sequential(
+            nn.Linear(1, input_dim),
+            nn.GELU(),
+            nn.Linear(input_dim, input_dim),
+        )
 
         self.fusion_proj = nn.Sequential(
             nn.LayerNorm(3 * input_dim),
             nn.Linear(3 * input_dim, input_dim),
-            # nn.GELU(),
-            # nn.Linear(d_model, d_model),
+            nn.GELU(),
+            nn.Linear(input_dim, input_dim),
         )
 
         encoder_layer = nn.TransformerEncoderLayer(
@@ -53,6 +96,34 @@ class TAE_v1_1(nn.Module):
             nn.LayerNorm(input_dim),
             nn.Linear(input_dim, latent_dim),
         )
+
+        self.latent_array = nn.Parameter(
+            torch.randn(1, latent_num_tokens, latent_dim)
+        )
+
+        self.encoder_to_latent = CrossAttentionBlock(
+            dim=latent_dim,
+            nhead=nhead,
+        )
+
+        latent_layer = nn.TransformerEncoderLayer(
+            d_model=latent_dim,
+            nhead=nhead,
+            batch_first=True,
+            norm_first=True,
+        )
+        self.latent_transformer = nn.TransformerEncoder(latent_layer, num_layers=num_layers)
+
+        self.output_queries = nn.Parameter(
+            torch.randn(1, num_tokens, latent_dim)
+        )
+
+        self.latent_to_output = CrossAttentionBlock(
+            dim=latent_dim,
+            nhead=nhead,
+        )
+
+
         self.from_latent = nn.Sequential(
             nn.Linear(latent_dim, input_dim),
             nn.GELU(),
@@ -86,8 +157,6 @@ class TAE_v1_1(nn.Module):
     def encode(self, x: torch.Tensor, padding_mask: torch.Tensor | None = None) -> torch.Tensor:
         self.encode_sc(x, padding_mask)
 
-        self._last_num_tokens = int(x.shape[1])
-
         id = x[..., 0].long()
         time = x[..., 1].unsqueeze(-1)
         recording = x[..., 2].unsqueeze(-1)
@@ -102,7 +171,19 @@ class TAE_v1_1(nn.Module):
 
         x = self.encoder(x, src_key_padding_mask=padding_mask)
 
-        z = self.to_latent(x)
+        x = self.to_latent(x)
+
+        B = x.shape[0]
+        latent_queries = self.latent_array.expand(B, -1, -1)
+
+        x = self.encoder_to_latent(
+            query=latent_queries,
+            key_value=x,
+            key_padding_mask=padding_mask,
+        )
+
+        z = self.latent_transformer(x)
+
         return z
 
     def decode(
@@ -111,7 +192,16 @@ class TAE_v1_1(nn.Module):
         padding_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
 
-        x = self.from_latent(z)
+        B = z.shape[0]
+
+        output_queries = self.output_queries.expand(B, -1, -1)
+
+        x = self.latent_to_output(
+            query=output_queries,
+            key_value=z,
+        )
+
+        x = self.from_latent(x)
 
         x = self.decoder(x, src_key_padding_mask=padding_mask)
 

@@ -10,6 +10,7 @@ from .TAE_v1 import TAE_v1
 from .TAE_v1_1 import TAE_v1_1
 from .TAE_v2 import TAE_v2
 from .TAE_v3 import TAE_v3
+from .TAE_v4 import TAE_v4
 from .PAE_v0 import PAE_v0
 
 
@@ -21,6 +22,8 @@ __all__ = [
     "TAE_v1",
     "TAE_v1_1",
     "TAE_v2",
+    "TAE_v3",
+    "TAE_v4",
     "PAE_v0",
     "TemplateNeuralAutoencoder",
     "TransformerNeuralAutoencoder",

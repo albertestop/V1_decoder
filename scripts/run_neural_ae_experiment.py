@@ -61,7 +61,6 @@ def main() -> None:
     train_example = next(iter(train_loader))
     num_tokens, token_dim = infer_batch_shape(train_example)
     LOGGER.info("Inferred model input from training batch | token_dim=%d | padded_num_tokens=%d", token_dim, num_tokens)
-    dataset_num_tokens = int(getattr(dataset, "shape", (0, num_tokens, token_dim))[1])
     LOGGER.info("Loading %s model", config.model["architecture"])
     if str(config.model["architecture"]).lower() == "custom":
         model_target = str(config.model["target"])
@@ -74,7 +73,7 @@ def main() -> None:
     else:
         model_config = dict(config.model)
         model_config["token_dim"] = token_dim
-        model_config["num_tokens"] = dataset_num_tokens
+        model_config["num_tokens"] = num_tokens
         config.model = model_config
         model = build_model(model_config)
         model_name = str(config.model["architecture"])
@@ -105,7 +104,7 @@ def main() -> None:
         "val_mae": eval_metrics["mae"],
     }
     if latent_dim is not None:
-        summary["compression_ratio"] = float((token_dim * dataset_num_tokens) / latent_dim)
+        summary["compression_ratio"] = float((token_dim * num_tokens) / latent_dim)
     else:
         summary["compression_ratio"] = None
 

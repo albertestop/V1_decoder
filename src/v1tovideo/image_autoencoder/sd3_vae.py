@@ -10,7 +10,9 @@ from diffusers import models
 from PIL import Image
 from torchvision import transforms
 
-from .metrics import grayscale_reconstruction_metrics
+from v1tovideo.image_autoencoder.metrics import grayscale_reconstruction_metrics
+
+IMAGE_EXTENSIONS = {".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
 
 
 def get_device() -> str:
@@ -92,12 +94,11 @@ def encode_decode_image(
 
 
 def _list_frame_paths(frames_root: Path) -> list[Path]:
-    frame_paths: list[Path] = []
-    for trial_dir in frames_root.iterdir():
-        if not trial_dir.is_dir():
-            continue
-        frame_paths.extend([p for p in trial_dir.iterdir() if p.is_file()])
-    return frame_paths
+    return sorted(
+        p
+        for p in frames_root.rglob("*")
+        if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+    )
 
 
 def evaluate_random_frames(
@@ -113,6 +114,7 @@ def evaluate_random_frames(
     np.random.seed(seed)
 
     frame_paths = _list_frame_paths(frames_root)
+    print(frame_paths)
     if not frame_paths:
         raise ValueError(f"No frame files found under {frames_root}")
 

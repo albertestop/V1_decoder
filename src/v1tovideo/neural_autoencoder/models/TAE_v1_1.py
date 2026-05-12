@@ -29,8 +29,6 @@ class TAE_v1_1(nn.Module):
         self.input_dim = int(input_dim)
         self.laten_num_tokens = int(latent_num_tokens)
 
-        self._last_num_tokens: int | None = None
-
         self.id_embedding = nn.Embedding(num_tokens, input_dim)
         self.time_proj = nn.Linear(1, input_dim)
         self.rec_proj = nn.Linear(1, input_dim)
@@ -85,8 +83,6 @@ class TAE_v1_1(nn.Module):
             
     def encode(self, x: torch.Tensor, padding_mask: torch.Tensor | None = None) -> torch.Tensor:
         self.encode_sc(x, padding_mask)
-
-        self._last_num_tokens = int(x.shape[1])
 
         id = x[..., 0].long()
         time = x[..., 1].unsqueeze(-1)
