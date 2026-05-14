@@ -79,7 +79,7 @@ class TAE_v1(nn.Module):
             raise ValueError(f"Expected num_tokens={self.num_tokens}, got {tuple(x.shape)}")
 
         if padding_mask is None:
-            padding_mask = torch.zeros((x.shape[0], x.shape[1]), dtype=torch.bool, device=x.device)
+            raise ValueError(f"Got None for padding_mask")
             
     def encode(self, x: torch.Tensor, padding_mask: torch.Tensor | None = None) -> torch.Tensor:
         self.encode_sc(x, padding_mask)

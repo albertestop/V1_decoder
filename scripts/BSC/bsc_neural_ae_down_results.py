@@ -72,7 +72,8 @@ def main() -> None:
             print(f"Downloading {run_name} -> {local_run_dir}")
             local_run_dir.mkdir(parents=True, exist_ok=True)
             run_cmd(["scp", "-r", f"{ssh_transfer}:{remote_run_dir}/.", str(local_run_dir)])
-            run_cmd(["ssh", ssh_transfer, f"rm -rf '{remote_run_dir}'"])
+            delete = input("Delete remote run outputs? y/n")
+            if delete == 'y': run_cmd(["ssh", ssh_transfer, f"rm -rf '{remote_run_dir}'"])
             print(f"Downloaded and removed remote: {run_name}")
 
 

@@ -5,7 +5,7 @@ from torch import nn
 import numpy as np
 
 
-class TAE_v1_1(nn.Module):
+class TAE_v2_1(nn.Module):
     """Starter template for custom neural autoencoder experiments.
 
     Expected input shape: [batch, num_tokens, token_dim]
@@ -27,7 +27,9 @@ class TAE_v1_1(nn.Module):
         self.num_tokens = int(num_tokens) if num_tokens is not None else None
         self.latent_dim = int(latent_dim)
         self.input_dim = int(input_dim)
-        self.laten_num_tokens = int(latent_num_tokens)
+        self.latent_num_tokens = int(latent_num_tokens)
+
+        self._last_num_tokens: int | None = None
 
         self.id_embedding = nn.Embedding(num_tokens, input_dim)
         self.time_proj = nn.Linear(1, input_dim)
@@ -57,6 +59,16 @@ class TAE_v1_1(nn.Module):
             nn.Linear(input_dim, input_dim),
         )
 
+        readdition_layer = nn.TransformerEncoderLayer(
+            d_model=latent_dim,
+            nhead=nhead,
+            batch_first=True,
+        )
+        self.readd = nn.TransformerEncoder(readdition_layer, num_layers=num_layers)
+
+        self.token_queries = nn.Parameter(torch.randn(1, num_tokens, latent_dim))
+        self.token_uncompress = nn.MultiheadAttention(latent_dim, nhead, batch_first=True)
+
         decoder_layer = nn.TransformerEncoderLayer(
             d_model=input_dim,
             nhead=nhead,
@@ -84,6 +96,8 @@ class TAE_v1_1(nn.Module):
     def encode(self, x: torch.Tensor, padding_mask: torch.Tensor | None = None) -> torch.Tensor:
         self.encode_sc(x, padding_mask)
 
+        self._last_num_tokens = int(x.shape[1])
+
         id = x[..., 0].long()
         time = x[..., 1].unsqueeze(-1)
         recording = x[..., 2].unsqueeze(-1)
@@ -99,6 +113,9 @@ class TAE_v1_1(nn.Module):
         x = self.encoder(x, src_key_padding_mask=padding_mask)
 
         z = self.to_latent(x)
+
+        z = z[:, :self.latent_num_tokens, :]
+        
         return z
 
     def decode(
@@ -107,7 +124,14 @@ class TAE_v1_1(nn.Module):
         padding_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
 
-        x = self.from_latent(z)
+        readdition = nn.Parameter(torch.randn((z.shape[0], self.num_tokens - self.latent_num_tokens, self.latent_dim), device=z.device))
+        readdition = self.readd(readdition)
+        z = torch.concatenate([z, readdition], axis=1)
+
+        q = self.token_queries[:, :self.num_tokens, :].expand(z.shape[0], -1, -1)
+        z_full, _ = self.token_uncompress(query=q, key=z, value=z)
+        
+        x = self.from_latent(z_full)  
 
         x = self.decoder(x, src_key_padding_mask=padding_mask)
 
