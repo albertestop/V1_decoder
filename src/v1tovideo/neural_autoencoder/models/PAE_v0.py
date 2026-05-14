@@ -144,9 +144,10 @@ class PAE_v0(nn.Module):
         x: torch.Tensor,
         padding_mask: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
+        was_training = self.training
         self.eval()
         dtype = x.dtype
-        out = self(x)
+        out = self(x, padding_mask=padding_mask)
         id_logits, time_pred, rec_pred, _ = out
 
         id_pred = id_logits.argmax(dim=-1).to(dtype=dtype)
@@ -154,4 +155,6 @@ class PAE_v0(nn.Module):
             (id_pred, time_pred.squeeze(-1).to(dtype=dtype), rec_pred.squeeze(-1).to(dtype=dtype)),
             dim=-1,
         )
+        if was_training:
+            self.train()
         return preds.masked_fill(padding_mask.unsqueeze(-1), 0.0)
