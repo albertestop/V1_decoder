@@ -5,14 +5,11 @@ from torch import nn
 import numpy as np
 
 
-class TAE_v2_1(nn.Module):
-    """
-    
-    Initial projection back to a simple sum.
-    Token uncompression done by:
-    Multihead attention where q = TRANSFORMED random parameters,
-    and keys, values = z (compressed tokens)
+class TAE_v2(nn.Module):
+    """Starter template for custom neural autoencoder experiments.
 
+    Expected input shape: [batch, num_tokens, token_dim]
+    Forward return contract: (reconstruction, latents)
     """
 
     def __init__(
@@ -38,13 +35,6 @@ class TAE_v2_1(nn.Module):
         self.time_proj = nn.Linear(1, input_dim)
         self.rec_proj = nn.Linear(1, input_dim)
 
-        self.fusion_proj = nn.Sequential(
-            nn.LayerNorm(3 * input_dim),
-            nn.Linear(3 * input_dim, input_dim),
-            nn.GELU(),
-            nn.Linear(input_dim, input_dim),
-        )
-
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=input_dim,
             nhead=nhead,
@@ -63,12 +53,6 @@ class TAE_v2_1(nn.Module):
         )
 
         self.token_queries = nn.Parameter(torch.randn(1, num_tokens, latent_dim))
-        readdition_layer = nn.TransformerEncoderLayer(
-            d_model=latent_dim,
-            nhead=nhead,
-            batch_first=True,
-        )
-        self.readd_transform = nn.TransformerEncoder(readdition_layer, num_layers=num_layers)
         self.token_uncompress = nn.MultiheadAttention(latent_dim, nhead, batch_first=True)
 
         decoder_layer = nn.TransformerEncoderLayer(
@@ -109,8 +93,7 @@ class TAE_v2_1(nn.Module):
         t_proj = self.time_proj(time)   # Project them into the same embedding space
         rec_proj = self.rec_proj(recording) # You want each token to become a single vector that encodes:what (id)when (time)value (recording)
 
-        x = torch.cat([id_emb, t_proj, rec_proj], dim=-1)
-        x = self.fusion_proj(x)
+        x = id_emb + t_proj + rec_proj  # The model learns to encode each component so they remain recoverable after summation.
 
         x = self.encoder(x, src_key_padding_mask=padding_mask)
 
@@ -126,8 +109,7 @@ class TAE_v2_1(nn.Module):
         padding_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
 
-        q = self.token_queries.expand(z.size(0), -1, -1)   # [B, N, latent_dim]
-        q = self.readd_transform(q)
+        q = self.token_queries[:, :self.num_tokens, :].expand(z.size(0), -1, -1)   # [B, N, latent_dim]
         z_full, _ = self.token_uncompress(query=q, key=z, value=z)    # [B, N, latent_dim]
         
         x = self.from_latent(z_full)  

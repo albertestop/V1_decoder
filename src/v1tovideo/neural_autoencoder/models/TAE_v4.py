@@ -123,7 +123,6 @@ class TAE_v4(nn.Module):
             nhead=nhead,
         )
 
-
         self.from_latent = nn.Sequential(
             nn.Linear(latent_dim, input_dim),
             nn.GELU(),

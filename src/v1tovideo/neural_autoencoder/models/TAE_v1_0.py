@@ -5,13 +5,10 @@ from torch import nn
 import numpy as np
 
 
-class TAE_v2_1(nn.Module):
+class TAE_v1_0(nn.Module):
     """
-    
-    Initial projection back to a simple sum.
-    Token uncompression done by:
-    Multihead attention where q = TRANSFORMED random parameters,
-    and keys, values = z (compressed tokens)
+
+        As TAE_v1 but init projection with only one trainable layer
 
     """
 
@@ -62,14 +59,14 @@ class TAE_v2_1(nn.Module):
             nn.Linear(input_dim, input_dim),
         )
 
-        self.token_queries = nn.Parameter(torch.randn(1, num_tokens, latent_dim))
+        self.readd_tokens = nn.Parameter(torch.randn(1, self.num_tokens - self.latent_num_tokens, self.latent_dim) * 0.02)
+
         readdition_layer = nn.TransformerEncoderLayer(
             d_model=latent_dim,
             nhead=nhead,
             batch_first=True,
         )
         self.readd_transform = nn.TransformerEncoder(readdition_layer, num_layers=num_layers)
-        self.token_uncompress = nn.MultiheadAttention(latent_dim, nhead, batch_first=True)
 
         decoder_layer = nn.TransformerEncoderLayer(
             d_model=input_dim,
@@ -117,7 +114,7 @@ class TAE_v2_1(nn.Module):
         z = self.to_latent(x)
 
         z = z[:, :self.latent_num_tokens, :]
-        
+
         return z
 
     def decode(
@@ -126,11 +123,11 @@ class TAE_v2_1(nn.Module):
         padding_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
 
-        q = self.token_queries.expand(z.size(0), -1, -1)   # [B, N, latent_dim]
-        q = self.readd_transform(q)
-        z_full, _ = self.token_uncompress(query=q, key=z, value=z)    # [B, N, latent_dim]
-        
-        x = self.from_latent(z_full)  
+        readdition_init = self.readd_tokens.expand(z.shape[0], -1, -1)
+        readdition = self.readd_transform(readdition_init)
+        x = torch.concatenate([z, readdition], axis=1)
+
+        x = self.from_latent(x)
 
         x = self.decoder(x, src_key_padding_mask=padding_mask)
 

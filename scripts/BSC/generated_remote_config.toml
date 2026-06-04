@@ -17,12 +17,12 @@ num_heads = 4
 dropout = 0.1
 
 [custom_model]
-target = "v1tovideo.neural_autoencoder.models:TAE_v2_4"
+target = "v1tovideo.neural_autoencoder.models:TAE_v0_2"
 input_dim = 64
 latent_dim = 64
-latent_num_tokens = 1024
+latent_num_tokens = 5443
 num_layers = 4
-nhead = 4
+nhead = 8
 
 [train]
 epochs = 20
@@ -44,4 +44,4 @@ poisson_full = false
 poisson_eps = 1e-08
 
 [output]
-dir = "/gpfs/projects/uab103/uab020077/transformer_arch/transformer_arch_1/transformer_arch/outputs/neural_autoencoder/run_44"
+dir = "/gpfs/projects/uab103/uab020077/transformer_arch/transformer_arch_11/transformer_arch/outputs/neural_autoencoder/run_59"

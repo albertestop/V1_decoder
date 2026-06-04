@@ -6,12 +6,14 @@ from .core import (
 )
 from .loading import build_model_from_target
 from .TAE_v0 import TAE_v0
+from .TAE_v0_1 import TAE_v0_1
+from .TAE_v0_2 import TAE_v0_2
 from .TAE_v1 import TAE_v1
 from .TAE_v1_1 import TAE_v1_1
+from .TAE_v1_2 import TAE_v1_2
+from .TAE_v1_3 import TAE_v1_3
 from .TAE_v2 import TAE_v2
 from .TAE_v2_1 import TAE_v2_1
-from .TAE_v2_2 import TAE_v2_2
-from .TAE_v2_4 import TAE_v2_4
 from .TAE_v4 import TAE_v4
 from .PAE_v0 import PAE_v0
 
@@ -21,12 +23,14 @@ __all__ = [
     "MLPNeuralAutoencoder",
     "PerceiverAE",
     "TAE_v0",
+    "TAE_v0_1",
+    "TAE_v0_2",
     "TAE_v1",
     "TAE_v1_1",
+    "TAE_v1_2",
+    "TAE_v1_3",
     "TAE_v2",
     "TAE_v2_1",
-    "TAE_v2_2",
-    "TAE_v2_4",
     "TAE_v4",
     "PAE_v0",
     "TemplateNeuralAutoencoder",
