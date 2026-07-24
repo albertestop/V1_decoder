@@ -150,8 +150,6 @@ def save_reconstruction_plots(
     train_loss = [d["train_loss"] for d in history]
     val_loss = [d["val_loss"] for d in history]
 
-    train_loss[0] = None
-
     plt.figure()
     plt.plot(epochs, train_loss, label="Train Loss")
     plt.plot(epochs, val_loss, label="Validation Loss")
@@ -161,6 +159,28 @@ def save_reconstruction_plots(
     plt.legend()
     plt.grid()
     plt.savefig(os.path.join(output_dir, 'train_evo.png'))
+    plt.close()
+
+    component_losses = (
+        ("id", "ID Loss"),
+        ("time", "Time Loss"),
+        ("rec", "Recording Loss"),
+    )
+    if all(f"{split}_loss_{name}" in history[0] for split in ("train", "val") for name, _ in component_losses):
+        fig, axes = plt.subplots(len(component_losses), 1, figsize=(8, 9), sharex=True)
+        for ax, (name, title) in zip(axes, component_losses):
+            train_comp_loss = [d.get(f"train_loss_{name}", np.nan) for d in history]
+            val_comp_loss = [d.get(f"val_loss_{name}", np.nan) for d in history]
+            ax.plot(epochs, train_comp_loss, label=f"Train {title}")
+            ax.plot(epochs, val_comp_loss, label=f"Validation {title}")
+            ax.set_ylabel("Loss")
+            ax.set_title(title)
+            ax.legend()
+            ax.grid()
+        axes[-1].set_xlabel("Epoch")
+        fig.tight_layout()
+        fig.savefig(os.path.join(output_dir, 'train_comp_evo.png'))
+        plt.close(fig)
 
 
     last_trial = list(dataset_map.keys())[-1]

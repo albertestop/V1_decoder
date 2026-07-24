@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import re
-import shutil
 import subprocess
 import sys
-import time
 from pathlib import Path
 from typing import Any
 
@@ -43,22 +40,6 @@ def remote_test(ssh_target: str, test_expr: str) -> bool:
         check=True,
     )
     return "YES" in result.stdout
-
-
-def reserve_next_local_run_dir(base_dir: Path) -> Path:
-    base_dir.mkdir(parents=True, exist_ok=True)
-    while True:
-        max_idx = -1
-        for child in base_dir.iterdir():
-            match = re.fullmatch(r"run_(\d+)", child.name)
-            if match:
-                max_idx = max(max_idx, int(match.group(1)))
-        candidate = base_dir / f"run_{max_idx + 1}"
-        try:
-            candidate.mkdir(parents=False, exist_ok=False)
-            return candidate
-        except FileExistsError:
-            continue
 
 
 def _toml_value(value: Any) -> str:
@@ -115,6 +96,13 @@ def parse_model_file_from_target(target: str) -> Path | None:
     return REPO_ROOT / "src" / Path(*module.split(".")).with_suffix(".py")
 
 
+def remote_output_dir(remote_root: Path, output_dir: str) -> Path:
+    path = Path(output_dir)
+    if path.is_absolute():
+        return path
+    return remote_root / path
+
+
 def main() -> None:
     conf_path = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CONF
     conf = load_conf(conf_path)
@@ -141,11 +129,7 @@ def main() -> None:
     if not local_dataset_dir.exists():
         raise FileNotFoundError(f"Local dataset not found: {local_dataset_dir}")
 
-    local_output_base = REPO_ROOT / "outputs" / "neural_autoencoder"
-    local_run_dir = reserve_next_local_run_dir(local_output_base)
-    remote_run_dir = remote_root / "outputs" / "neural_autoencoder" / local_run_dir.name
-
-    print(f"Local run directory: {local_run_dir}")
+    remote_run_dir = remote_output_dir(remote_root, str(experiment_cfg["output"]["dir"]))
     print(f"Remote run directory: {remote_run_dir}")
 
     run_cmd(["ssh", ssh_transfer, f"mkdir -p '{remote_data_root}' '{remote_bsc_dir}'"])

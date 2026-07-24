@@ -8,7 +8,8 @@ import numpy as np
 class TAE_v1_0(nn.Module):
     """
 
-        As TAE_v1 but init projection with only one trainable layer
+        Like TAE_v0_2 with token compression
+        As TAE_v1 but init projection with only two trainable layers and GELU act f
 
     """
 

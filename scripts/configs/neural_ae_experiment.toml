@@ -21,12 +21,12 @@ dropout = 0.1
 
 [custom_model]
 # Used only when architecture = "custom"
-target = "v1tovideo.neural_autoencoder.models:TAE_v0_2"
+target = "v1tovideo.neural_autoencoder.models:TAE_v1.00"
 input_dim = 64
 latent_dim = 64
-latent_num_tokens = 5443
+latent_num_tokens = 4500
 num_layers = 4
-nhead = 8
+nhead = 4
 
 [train]
 epochs = 20
@@ -39,9 +39,9 @@ device = "cuda:1"
 # Supported: "masked_mse", "masked_mae", "poisson_nll", "combined"
 name = "combined"
 # Combined options (used only when name = "combined")
-weight_id = 1.0
+weight_id = 0.0
 weight_time = 1.0
-weight_rec = 1.0
+weight_rec = 10.0
 # id supports: "cross_entropy"
 name_id = "cross_entropy"
 # time/rec support: "masked_mse", "masked_mae", "poisson_nll"

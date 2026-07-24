@@ -194,36 +194,48 @@ class AutoencoderLightningModule(pl.LightningModule):
             }
         raise ValueError(f"Unsupported model output tuple length: {len(out)}")
 
-    def _compute_loss(self, outputs: torch.Tensor, x: torch.Tensor, padding_mask: torch.Tensor) -> torch.Tensor:
+    def _compute_loss_and_terms(
+        self,
+        outputs: dict[str, torch.Tensor],
+        x: torch.Tensor,
+        padding_mask: torch.Tensor,
+    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         if self._loss_name == "masked_mse":
-            return self._masked_mse(outputs["recon"], x, padding_mask)
+            return self._masked_mse(outputs["recon"], x, padding_mask), {}
         if self._loss_name == "masked_mae":
-            return self._masked_mae(outputs["recon"], x, padding_mask)
+            return self._masked_mae(outputs["recon"], x, padding_mask), {}
         if self._loss_name == "poisson_nll":
-            return self._masked_poisson_nll(outputs["recon"], x, padding_mask)
+            return self._masked_poisson_nll(outputs["recon"], x, padding_mask), {}
         if self._loss_name == "combined":
             if not all(k in outputs for k in ("id_logits", "time_pred", "rec_pred")):
                 raise ValueError("combined loss requires model outputs: id_logits, time_pred, rec_pred")
-            loss, terms = self._masked_combined_loss(outputs["id_logits"], outputs["time_pred"], outputs["rec_pred"], x, padding_mask)
-            self.log("loss_id", terms["loss_id"], on_step=False, on_epoch=True, batch_size=x.shape[0])
-            self.log("loss_time", terms["loss_time"], on_step=False, on_epoch=True, batch_size=x.shape[0])
-            self.log("loss_rec", terms["loss_rec"], on_step=False, on_epoch=True, batch_size=x.shape[0])
-            return loss
+            return self._masked_combined_loss(outputs["id_logits"], outputs["time_pred"], outputs["rec_pred"], x, padding_mask)
+        raise ValueError(f"Unsupported loss_name '{self._loss_name}'")
+
+    def _compute_loss(
+        self,
+        outputs: dict[str, torch.Tensor],
+        x: torch.Tensor,
+        padding_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        loss, _ = self._compute_loss_and_terms(outputs, x, padding_mask)
+        return loss
 
     def training_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
         x, padding_mask = self._unpack_batch(batch)
         outputs = self._forward_outputs(x, padding_mask)
         loss = self._compute_loss(outputs, x, padding_mask)
-        self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True, batch_size=x.shape[0])
         return loss
 
     def validation_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
         x, padding_mask = self._unpack_batch(batch)
         outputs = self._forward_outputs(x, padding_mask)
-        loss = self._compute_loss(outputs, x, padding_mask)
+        loss, terms = self._compute_loss_and_terms(outputs, x, padding_mask)
         mse = self._masked_mse(outputs["recon"], x, padding_mask)
         mae = self._masked_mae(outputs["recon"], x, padding_mask)
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, batch_size=x.shape[0])
+        for name, value in terms.items():
+            self.log(f"val_{name}", value, on_step=False, on_epoch=True, batch_size=x.shape[0])
         self.log("val_mse", mse, on_step=False, on_epoch=True, batch_size=x.shape[0])
         self.log("val_mae", mae, on_step=False, on_epoch=True, batch_size=x.shape[0])
         return loss
@@ -237,30 +249,108 @@ class AutoencoderLightningModule(pl.LightningModule):
 
 
 class TrainHistoryCallback(pl.Callback):  # type: ignore[misc]
-    def __init__(self) -> None:
+    _TERM_NAMES = ("loss_id", "loss_time", "loss_rec")
+
+    def __init__(self, train_loader: DataLoader[Any]) -> None:
+        self.train_loader = train_loader
         self.history: list[dict[str, float]] = []
         self._epoch_start_time = 0.0
+        self._latest_train_loss = float("nan")
+        self._latest_train_terms = {name: float("nan") for name in self._TERM_NAMES}
+        self._logged_epochs: set[float] = set()
 
-    def on_train_epoch_start(self, trainer: Any, pl_module: Any) -> None:
-        self._epoch_start_time = time.perf_counter()
+    def _move_batch_to_device(self, batch: Any, device: torch.device) -> Any:
+        if torch.is_tensor(batch):
+            return batch.to(device, non_blocking=True)
+        if isinstance(batch, tuple):
+            return tuple(self._move_batch_to_device(item, device) for item in batch)
+        if isinstance(batch, list):
+            return [self._move_batch_to_device(item, device) for item in batch]
+        if isinstance(batch, dict):
+            return {key: self._move_batch_to_device(value, device) for key, value in batch.items()}
+        return batch
 
-    def on_validation_epoch_end(self, trainer: Any, pl_module: Any) -> None:
-        metrics = trainer.callback_metrics
-        row = {
-            "epoch": float(trainer.current_epoch + 1),
-            "train_loss": float(metrics["train_loss"].detach().cpu()) if "train_loss" in metrics else float("nan"),
-            "val_loss": float(metrics["val_loss"].detach().cpu()) if "val_loss" in metrics else float("nan"),
-            "epoch_time_sec": float(time.perf_counter() - self._epoch_start_time),
-        }
-        self.history.append(row)
+    def _compute_train_eval_metrics(self, pl_module: AutoencoderLightningModule) -> dict[str, float]:
+        was_training = pl_module.training
+        pl_module.eval()
+        total_loss = 0.0
+        total_terms = {name: 0.0 for name in self._TERM_NAMES}
+        seen_terms = set()
+        total_samples = 0
+        device = pl_module.device
+
+        with torch.inference_mode():
+            for batch in self.train_loader:
+                batch = self._move_batch_to_device(batch, device)
+                x, padding_mask = pl_module._unpack_batch(batch)
+                outputs = pl_module._forward_outputs(x, padding_mask)
+                loss, terms = pl_module._compute_loss_and_terms(outputs, x, padding_mask)
+                batch_size = int(x.shape[0])
+                total_loss += float(loss.detach().cpu()) * batch_size
+                for name in self._TERM_NAMES:
+                    if name in terms:
+                        total_terms[name] += float(terms[name].detach().cpu()) * batch_size
+                        seen_terms.add(name)
+                total_samples += batch_size
+
+        if was_training:
+            pl_module.train()
+        denom = max(total_samples, 1)
+        metrics = {"train_loss": total_loss / denom}
+        for name in self._TERM_NAMES:
+            metrics[f"train_{name}"] = total_terms[name] / denom if name in seen_terms else float("nan")
+        return metrics
+
+    def _log_epoch_row(self, trainer: Any, row: dict[str, float]) -> None:
+        epoch = row["epoch"]
+        if epoch in self._logged_epochs:
+            return
+        if row["train_loss"] != row["train_loss"] or row["val_loss"] != row["val_loss"]:
+            return
+        self._logged_epochs.add(epoch)
         LOGGER.info(
             "Epoch %d/%d | train_loss=%.6f | val_loss=%.6f | epoch_time=%.2fs",
-            trainer.current_epoch + 1,
+            int(epoch),
             trainer.max_epochs,
             row["train_loss"],
             row["val_loss"],
             row["epoch_time_sec"],
         )
+
+    def on_train_epoch_start(self, trainer: Any, pl_module: Any) -> None:
+        self._epoch_start_time = time.perf_counter()
+
+    def on_train_epoch_end(self, trainer: Any, pl_module: Any) -> None:
+        train_metrics = self._compute_train_eval_metrics(pl_module)
+        self._latest_train_loss = train_metrics["train_loss"]
+        self._latest_train_terms = {name: train_metrics[f"train_{name}"] for name in self._TERM_NAMES}
+        pl_module.log("train_loss", self._latest_train_loss, on_step=False, on_epoch=True, prog_bar=True)
+        for name, value in self._latest_train_terms.items():
+            pl_module.log(f"train_{name}", value, on_step=False, on_epoch=True)
+        if self.history and self.history[-1]["epoch"] == float(trainer.current_epoch + 1):
+            self.history[-1]["train_loss"] = self._latest_train_loss
+            for name, value in self._latest_train_terms.items():
+                self.history[-1][f"train_{name}"] = value
+            self.history[-1]["epoch_time_sec"] = float(time.perf_counter() - self._epoch_start_time)
+            self._log_epoch_row(trainer, self.history[-1])
+
+    def on_validation_epoch_end(self, trainer: Any, pl_module: Any) -> None:
+        metrics = trainer.callback_metrics
+        row = {
+            "epoch": float(trainer.current_epoch + 1),
+            "train_loss": self._latest_train_loss,
+            **{f"train_{name}": self._latest_train_terms[name] for name in self._TERM_NAMES},
+            "val_loss": float(metrics["val_loss"].detach().cpu()) if "val_loss" in metrics else float("nan"),
+            **{
+                f"val_{name}": float(metrics[f"val_{name}"].detach().cpu())
+                if f"val_{name}" in metrics
+                else float("nan")
+                for name in self._TERM_NAMES
+            },
+            "epoch_time_sec": float(time.perf_counter() - self._epoch_start_time),
+        }
+        self.history.append(row)
+        self._log_epoch_row(trainer, row)
 
 
 def train_autoencoder(
@@ -268,17 +358,19 @@ def train_autoencoder(
     train_loader: DataLoader[Any],
     val_loader: DataLoader[Any],
     config: TrainConfig,
+    logger: Any | bool = False,
 ) -> list[dict[str, float]]:
     """Train neural autoencoder with PyTorch Lightning and return epoch history."""
     lightning_model = AutoencoderLightningModule(model=model, config=config)
-    history_callback = TrainHistoryCallback()
+    history_callback = TrainHistoryCallback(train_loader)
     train_start = time.perf_counter()
     trainer = pl.Trainer(
         max_epochs=config.epochs,
-        logger=False,
+        logger=logger,
         enable_checkpointing=False,
         enable_model_summary=False,
         num_sanity_val_steps=0,
+        precision="bf16-mixed",
         gradient_clip_val=float(config.grad_clip_norm) if config.grad_clip_norm is not None else 0.0,
         enable_progress_bar=False,
         callbacks=[history_callback],

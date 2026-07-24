@@ -1,5 +1,5 @@
 [run]
-output_path = "data/synthetic_0"
+output_path = "data/synthetic_2"
 
 [synthetic]
 # Target output shape: [N, P, T]
@@ -8,7 +8,7 @@ sequence_length = 90
 n_neurons = 5443
 
 # K latent factors driving all neuron traces
-n_factors = 16
+n_factors = 64
 factor_scale = 1.0
 noise_std = 0.05
 baseline_std = 0.0

@@ -8,7 +8,9 @@ import numpy as np
 class TAE_v1(nn.Module):
     """
 
-        Like TAE_v0_1 with token compression
+        Like TAE_v1 with token compression with no ID prediction:
+        We reorder the arrays so that cells are ordered always from 0 to 5443.
+        SET ID WEIGHT TO 0!
         We compress the token n. 
         We add them back by generating random parameter array, 
         transforming it with some transformer layers, and finally
@@ -40,8 +42,8 @@ class TAE_v1(nn.Module):
         self.rec_proj = nn.Linear(1, input_dim)
 
         self.fusion_proj = nn.Sequential(
-            nn.LayerNorm(3 * input_dim),
-            nn.Linear(3 * input_dim, input_dim),
+            nn.LayerNorm(2 * input_dim),
+            nn.Linear(2 * input_dim, input_dim),
         )
 
         encoder_layer = nn.TransformerEncoderLayer(
@@ -99,16 +101,14 @@ class TAE_v1(nn.Module):
 
         self._last_num_tokens = int(x.shape[1])
 
-        id = x[..., 0].long()
         time = x[..., 1].unsqueeze(-1)
         recording = x[..., 2].unsqueeze(-1)
 
 
-        id_emb = self.id_embedding(id)  # A dictionary where each token has a trainable vector to identify it
         t_proj = self.time_proj(time)   # Project them into the same embedding space
         rec_proj = self.rec_proj(recording) # You want each token to become a single vector that encodes:what (id)when (time)value (recording)
 
-        x = torch.cat([id_emb, t_proj, rec_proj], dim=-1)
+        x = torch.cat([t_proj, rec_proj], dim=-1)
         x = self.fusion_proj(x)
 
         x = self.encoder(x, src_key_padding_mask=padding_mask)
@@ -133,20 +133,22 @@ class TAE_v1(nn.Module):
 
         x = self.decoder(x, src_key_padding_mask=padding_mask)
 
-        id_logits = self.id_head(x)         # classification over IDs
         time_pred = self.time_head(x)       # regression
         rec_pred = self.rec_head(x)         # regression
 
-        return id_logits, time_pred, rec_pred
+        return time_pred, rec_pred
 
     def forward(
         self,
         x: torch.Tensor,
         padding_mask: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
+        indices = np.argsort(x[:, :, 0], axis=1)
+        x = np.take_along_axis(x, indices[:, :, None], axis=1)
+        ids = x[:, :, 0]
         latents = self.encode(x, padding_mask=padding_mask)
-        id_logits, time_pred, rec_pred = self.decode(latents, padding_mask=padding_mask)
-        return id_logits, time_pred, rec_pred, latents
+        time_pred, rec_pred = self.decode(latents, padding_mask=padding_mask)
+        return ids, time_pred, rec_pred, latents
 
     @torch.no_grad()
     def predict(

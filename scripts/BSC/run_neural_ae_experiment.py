@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 import shutil
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parent.parents[1]
 SRC_DIR = REPO_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
@@ -27,7 +27,6 @@ from v1tovideo.neural_autoencoder.trainer_sc import (
     save_reconstruction_plots,
     save_reconstruction_artifacts,
 )
-from v1tovideo.neural_autoencoder.wandb_comp import *
 
 DEFAULT_CONFIG_PATH = REPO_ROOT / "scripts" / "configs" / "neural_ae_experiment.toml"
 LOGGER = logging.getLogger(__name__)
@@ -54,7 +53,6 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     shutil.copy(DEFAULT_CONFIG_PATH, output_dir / "config.toml")
-    wandb_logger = build_wandb_logger(config, config_path)
 
     LOGGER.info("Preparing dataset")
     train_loader, val_loader, dataset, dataset_map, val_map_idx = build_dataloaders(config.data)
@@ -79,15 +77,7 @@ def main() -> None:
         model = build_model(model_config)
         model_name = str(config.model["architecture"])
     LOGGER.info("Model initialized: %s", model_name)
-    wandb_logger.experiment.config.update(
-        {
-            "input": {"token_dim": token_dim, "num_tokens": num_tokens},
-            "model_name": model_name,
-            "model": wandb_json_safe(config.model),
-        },
-        allow_val_change=True,
-    )
-    wandb_logger.watch(model, log="all", log_freq=100)
+
     latent_dim = int(config.model["latent_dim"]) if "latent_dim" in config.model else None
 
     LOGGER.info("Training started | epochs=%d | device=%s", config.train.epochs, config.train.device)
@@ -96,7 +86,6 @@ def main() -> None:
         train_loader=train_loader,
         val_loader=val_loader,
         config=config.train,
-        logger=wandb_logger,
     )
 
     eval_metrics = evaluate_autoencoder(model=model, dataloader=val_loader, device=config.train.device)
@@ -124,15 +113,6 @@ def main() -> None:
 
     with (output_dir / "summary.json").open("w", encoding="utf-8") as fp:
         json.dump(summary, fp, indent=2)
-    wandb_logger.log_metrics(
-        {
-            "eval/val_mse": summary["val_mse"],
-            "eval/val_mae": summary["val_mae"],
-            "eval/train_loss": summary["train_loss"],
-            "eval/val_loss": summary["val_loss"],
-        }
-    )
-    wandb_logger.experiment.summary.update(wandb_json_safe(summary))
 
     save_reconstruction_artifacts(
         model=model,
@@ -151,10 +131,8 @@ def main() -> None:
         device=config.train.device
     )
     LOGGER.info("Saved reconstruction plots")
-    save_wandb_outputs(wandb_logger, output_dir)
 
     LOGGER.info("Run finished | output_dir=%s", output_dir)
-    wandb_logger.experiment.finish()
     print(summary)
 
 

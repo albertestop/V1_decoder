@@ -37,4 +37,12 @@ from v1tovideo.neural_autoencoder import (
 
 
 
-print(np.random.randint(0, 1, 1))
+arr = np.random.rand(120, 10, 3)
+
+print(arr[0, :, :])
+print(arr[-1, :, :])
+
+indices = np.argsort(arr[:, :, 0], axis=1)
+arr_sorted = np.take_along_axis(arr, indices[:, :, None], axis=1)
+print(arr_sorted[0, :, :])
+print(arr_sorted[-1, :, :])
