@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import torch
 from torch import nn
-import numpy as np
 
 
-class TAE_v1(nn.Module):
+class TAE_v1_00(nn.Module):
     """
 
         Like TAE_v1 with token compression with no ID prediction:
@@ -143,8 +142,10 @@ class TAE_v1(nn.Module):
         x: torch.Tensor,
         padding_mask: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        indices = np.argsort(x[:, :, 0], axis=1)
-        x = np.take_along_axis(x, indices[:, :, None], axis=1)
+        indices = torch.argsort(x[:, :, 0], dim=1)
+        x = x.gather(1, indices[:, :, None].expand(-1, -1, x.shape[-1]))
+        if padding_mask is not None:
+            padding_mask = padding_mask.gather(1, indices)
         ids = x[:, :, 0]
         latents = self.encode(x, padding_mask=padding_mask)
         time_pred, rec_pred = self.decode(latents, padding_mask=padding_mask)
@@ -160,11 +161,10 @@ class TAE_v1(nn.Module):
         self.eval()
         dtype = x.dtype
         out = self(x, padding_mask=padding_mask)
-        id_logits, time_pred, rec_pred, _ = out
+        ids, time_pred, rec_pred, _ = out
 
-        id_pred = id_logits.argmax(dim=-1).to(dtype=dtype)
         preds = torch.stack(
-            (id_pred, time_pred.squeeze(-1).to(dtype=dtype), rec_pred.squeeze(-1).to(dtype=dtype)),
+            (ids.to(dtype=dtype), time_pred.squeeze(-1).to(dtype=dtype), rec_pred.squeeze(-1).to(dtype=dtype)),
             dim=-1,
         )
         if was_training:

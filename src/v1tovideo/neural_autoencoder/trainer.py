@@ -135,11 +135,15 @@ class AutoencoderLightningModule(pl.LightningModule):
 
         ignore_index = -100
         id_target_masked = id_target.masked_fill(~valid, ignore_index)
-        loss_id = F.cross_entropy(
-            id_logits.reshape(-1, id_logits.shape[-1]),
-            id_target_masked.reshape(-1),
-            ignore_index=ignore_index,
-        )
+        w_id, w_time, w_rec = self._loss_weights
+        if w_id == 0.0:
+            loss_id = id_logits.new_zeros(())
+        else:
+            loss_id = F.cross_entropy(
+                id_logits.reshape(-1, id_logits.shape[-1]),
+                id_target_masked.reshape(-1),
+                ignore_index=ignore_index,
+            )
 
         loss_time = self._masked_value_loss(
             time_pred.squeeze(-1),
@@ -154,7 +158,6 @@ class AutoencoderLightningModule(pl.LightningModule):
             self._combined_loss_names["rec"],
         )
 
-        w_id, w_time, w_rec = self._loss_weights
         total = (w_id * loss_id) + (w_time * loss_time) + (w_rec * loss_rec)
         return total, {"loss_id": loss_id, "loss_time": loss_time, "loss_rec": loss_rec}
 

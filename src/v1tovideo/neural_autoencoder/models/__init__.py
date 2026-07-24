@@ -9,6 +9,7 @@ from .TAE_v0 import TAE_v0
 from .TAE_v0_1 import TAE_v0_1
 from .TAE_v0_2 import TAE_v0_2
 from .TAE_v1 import TAE_v1
+from .TAE_v1_00 import TAE_v1_00
 from .TAE_v1_1 import TAE_v1_1
 from .TAE_v1_2 import TAE_v1_2
 from .TAE_v1_3 import TAE_v1_3
