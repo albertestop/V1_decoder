@@ -89,13 +89,6 @@ def dump_toml(data: dict[str, Any], path: Path) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def parse_model_file_from_target(target: str) -> Path | None:
-    if ":" not in target:
-        return None
-    module, _symbol = target.split(":", 1)
-    return REPO_ROOT / "src" / Path(*module.split(".")).with_suffix(".py")
-
-
 def remote_output_dir(remote_root: Path, output_dir: str) -> Path:
     path = Path(output_dir)
     if path.is_absolute():
@@ -111,7 +104,6 @@ def main() -> None:
     ssh_transfer = conf["SSH_TRANSFER"]
     remote_root = Path(conf["REMOTE_ROOT"])
     remote_data_root = Path(conf["REMOTE_DATA_ROOT"])
-    sync_whole_repo = conf.get("SYNC_WHOLE_REPO", "true").lower() in {"1", "true", "yes", "y"}
 
     local_config = (REPO_ROOT / conf["LOCAL_EXPERIMENT_CONFIG"]).resolve()
     remote_config = remote_root / conf["REMOTE_EXPERIMENT_CONFIG"]
@@ -134,24 +126,23 @@ def main() -> None:
 
     run_cmd(["ssh", ssh_transfer, f"mkdir -p '{remote_data_root}' '{remote_bsc_dir}'"])
 
-    if sync_whole_repo:
-        run_cmd(
-            [
-                "rsync",
-                "-az",
-                "--delete",
-                "--exclude",
-                ".git/",
-                "--exclude",
-                "outputs/",
-                "--exclude",
-                "__pycache__/",
-                "--exclude",
-                "*.pyc",
-                f"{REPO_ROOT}/",
-                f"{ssh_transfer}:{remote_root}/",
-            ]
-        )
+    run_cmd(
+        [
+            "rsync",
+            "-az",
+            "--delete",
+            "--exclude",
+            ".git/",
+            "--exclude",
+            "outputs/",
+            "--exclude",
+            "__pycache__/",
+            "--exclude",
+            "*.pyc",
+            f"{REPO_ROOT}/",
+            f"{ssh_transfer}:{remote_root}/",
+        ]
+    )
 
     dataset_exists_remote = remote_test(ssh_transfer, f"test -d '{remote_dataset_dir}'")
     if not dataset_exists_remote:
@@ -165,23 +156,6 @@ def main() -> None:
         )
     else:
         print(f"Dataset already present on remote: {remote_dataset_dir}")
-
-    target = str(experiment_cfg["custom_model"]["target"])
-    local_model_file = parse_model_file_from_target(target)
-    if local_model_file is not None and local_model_file.exists():
-        remote_model_file = remote_root / local_model_file.relative_to(REPO_ROOT)
-        model_exists_remote = remote_test(ssh_transfer, f"test -f '{remote_model_file}'")
-        if not model_exists_remote:
-            run_cmd(
-                [
-                    "ssh",
-                    ssh_transfer,
-                    f"mkdir -p '{remote_model_file.parent}'",
-                ]
-            )
-            run_cmd(["scp", str(local_model_file), f"{ssh_transfer}:{remote_model_file}"])
-        else:
-            print(f"Model file already present on remote: {remote_model_file}")
 
     remote_cfg = dict(experiment_cfg)
     remote_cfg["data"] = dict(experiment_cfg["data"])
@@ -197,16 +171,6 @@ def main() -> None:
     dump_toml(remote_cfg, local_generated_cfg)
 
     run_cmd(["scp", str(local_generated_cfg), f"{ssh_transfer}:{remote_config}"])
-    if not sync_whole_repo:
-        run_cmd(["scp", str(Path(__file__).resolve().parent / "train_ae.py"), f"{ssh_transfer}:{remote_bsc_dir / 'train_ae.py'}"])
-        run_cmd(["scp", str(Path(__file__).resolve().parent / "run_neural_ae_remote.sh"), f"{ssh_transfer}:{remote_bsc_dir / 'run_neural_ae_remote.sh'}"])
-        run_cmd(
-            [
-                "scp",
-                str(Path(__file__).resolve().parent / "requirements_sci_albert_full.txt"),
-                f"{ssh_transfer}:{remote_bsc_dir / 'requirements_sci_albert_full.txt'}",
-            ]
-        )
 
     run_cmd(["ssh", ssh_transfer, f"chmod +x '{remote_sbatch}' '{remote_bsc_dir / 'train_ae.py'}'"])
 
