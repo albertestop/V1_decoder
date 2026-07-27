@@ -1,7 +1,7 @@
 """Neural activity autoencoder components."""
 
 from .data import NeuralDataConfig, NeuralTraceDataset, build_dataloaders, infer_batch_shape
-from .models import BaseNeuralAutoencoder, build_model_from_target
+from .models import build_model_from_target
 from .synthetic import (
     SyntheticFactorDatasetConfig,
     generate_factor_dataset,

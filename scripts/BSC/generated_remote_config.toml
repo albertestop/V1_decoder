@@ -7,8 +7,9 @@ shuffle_train = true
 num_workers = 16
 pin_memory = true
 drop_last = false
+
 [custom_model]
-target = "v1tovideo.neural_autoencoder.models:TAE_v1_00"
+target = "v1tovideo.neural_autoencoder.models:TAE_v1"
 input_dim = 64
 latent_dim = 64
 latent_num_tokens = 4500
@@ -24,9 +25,9 @@ device = "cuda:0"
 
 [train.loss]
 name = "combined"
-weight_id = 0.0
+weight_id = 0.1
 weight_time = 1.0
-weight_rec = 10.0
+weight_rec = 100.0
 name_id = "cross_entropy"
 name_time = "masked_mse"
 name_rec = "masked_mse"
@@ -35,4 +36,4 @@ poisson_full = false
 poisson_eps = 1e-08
 
 [output]
-dir = "/gpfs/projects/uab103/uab020077/transformer_arch/transformer_arch_1/transformer_arch/outputs/neural_autoencoder/default_run"
+dir = "/gpfs/projects/uab103/uab020077/transformer_arch/transformer_arch_2/transformer_arch/outputs/neural_autoencoder/default_run"
