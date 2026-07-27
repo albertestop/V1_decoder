@@ -1,4 +1,3 @@
-from .core import BaseNeuralAutoencoder
 from .loading import build_model_from_target
 from .TAE_v0 import TAE_v0
 from .TAE_v0_1 import TAE_v0_1
@@ -15,12 +14,12 @@ from .PAE_v0 import PAE_v0
 
 
 __all__ = [
-    "BaseNeuralAutoencoder",
     "PerceiverAE",
     "TAE_v0",
     "TAE_v0_1",
     "TAE_v0_2",
     "TAE_v1",
+    "TAE_v1_00",
     "TAE_v1_1",
     "TAE_v1_2",
     "TAE_v1_3",

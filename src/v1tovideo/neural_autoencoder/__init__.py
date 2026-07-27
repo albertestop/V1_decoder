@@ -19,7 +19,6 @@ from .trainer_sc import (
 )
 
 __all__ = [
-    "BaseNeuralAutoencoder",
     "NeuralDataConfig",
     "NeuralTraceDataset",
     "SyntheticFactorDatasetConfig",
