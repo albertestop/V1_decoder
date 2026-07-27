@@ -28,6 +28,7 @@ class TAE_v1_00(nn.Module):
         num_tokens: int | None = None,
     ) -> None:
         super().__init__()
+        self.outputs = ['value', 'value', 'value']
         self.token_dim = int(token_dim)
         self.num_tokens = int(num_tokens) if num_tokens is not None else None
         self.latent_dim = int(latent_dim)

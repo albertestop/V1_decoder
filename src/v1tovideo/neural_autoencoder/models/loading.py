@@ -30,4 +30,6 @@ def build_model_from_target(target: str, kwargs: dict[str, object] | None = None
     model = model_class(**(kwargs or {}))
     if not isinstance(model, nn.Module):
         raise ValueError(f"Instantiated object from '{target}' is not a torch.nn.Module")
+    if not hasattr(model, 'outputs'):
+        raise AttributeError("Models require an 'outputs' attribute defined during __init__ specifying the type of outputs")
     return model

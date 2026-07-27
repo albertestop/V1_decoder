@@ -19,7 +19,6 @@ def save_reconstruction_artifacts(
     model: nn.Module,
     sample_batch: Any,
     output_dir: Path,
-    loss_weights: list,
     device: str = "cuda",
     prefix: str = "sample",
 ) -> None:
@@ -30,9 +29,6 @@ def save_reconstruction_artifacts(
         dev = torch.device("cpu")
     else: dev = torch.device(device)
     model.eval().to(dev)
-    loss_weight_id = loss_weights[0]
-    loss_weight_time = loss_weights[1]
-    loss_weight_rec = loss_weights[2]
 
     with torch.no_grad():
         if torch.is_tensor(sample_batch):
@@ -48,7 +44,7 @@ def save_reconstruction_artifacts(
             recon, latents = out
         elif len(out) == 4:
             id_output, time_pred, rec_pred, latents = out
-            if loss_weight_id == 0:
+            if model.outputs[0] == 'value':
                 id_pred = id_output
             else:
                 id_pred = id_output.argmax(dim=-1).to(dtype=x.dtype)
