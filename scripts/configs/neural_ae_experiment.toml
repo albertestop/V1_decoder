@@ -24,7 +24,7 @@ dropout = 0.1
 target = "v1tovideo.neural_autoencoder.models:TAE_v1_00"
 input_dim = 64
 latent_dim = 64
-latent_num_tokens = 3500
+latent_num_tokens = 4500
 num_layers = 4
 nhead = 4
 

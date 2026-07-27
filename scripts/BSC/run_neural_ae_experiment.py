@@ -118,6 +118,7 @@ def main() -> None:
         model=model,
         sample_batch=next(iter(val_loader)),
         output_dir=output_dir,
+        loss_weights = [config.train.loss_weight_id, config.train.loss_weight_time, config.train.loss_weight_rec],
         device=config.train.device,
         prefix="val_sample",
     )
