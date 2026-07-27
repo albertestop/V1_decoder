@@ -7,15 +7,6 @@ shuffle_train = true
 num_workers = 16
 pin_memory = true
 drop_last = false
-architecture = "custom"
-
-[built_in_model]
-latent_dim = 256
-hidden_dim = 512
-num_layers = 2
-num_heads = 4
-dropout = 0.1
-
 [custom_model]
 target = "v1tovideo.neural_autoencoder.models:TAE_v1_00"
 input_dim = 64

@@ -22,7 +22,6 @@ def parse_neural_ae_experiment_config(config_path: Path) -> ExperimentConfig:
 
     data_cfg = data.get("data")
     custom_model_cfg = data.get("custom_model", {})
-    built_in_model_cfg = data.get("built_in_model", {})
     train_cfg = data.get("train", {})
     output_cfg = data.get("output", {})
 
@@ -30,8 +29,6 @@ def parse_neural_ae_experiment_config(config_path: Path) -> ExperimentConfig:
         raise ValueError("Config must define [data]")
     if not isinstance(custom_model_cfg, dict):
         raise ValueError("Config [custom_model] must be a table")
-    if not isinstance(built_in_model_cfg, dict):
-        raise ValueError("Config [built_in_model] must be a table")
     if not isinstance(train_cfg, dict):
         raise ValueError("Config [train] must be a table")
     if not isinstance(output_cfg, dict):
@@ -50,36 +47,16 @@ def parse_neural_ae_experiment_config(config_path: Path) -> ExperimentConfig:
         drop_last=bool(data_cfg.get("drop_last", False)),
     )
 
-    architecture = str(data_cfg.get("architecture")).strip().lower()
-    supported_architectures = {"mlp", "transformer", "custom"}
-    if architecture not in supported_architectures:
-        raise ValueError(
-            f"Unsupported architecture '{architecture}'. Supported: {sorted(supported_architectures)}"
-        )
+    model_target_raw = custom_model_cfg.get("target")
+    model_target = str(model_target_raw).strip() if model_target_raw is not None else None
+    model_kwargs = {k: v for k, v in custom_model_cfg.items() if k != "target"}
 
-    model_config: dict[str, Any]
-
-    if architecture == "custom":
-        model_target_raw = custom_model_cfg.get("target")
-        model_target = str(model_target_raw).strip() if model_target_raw is not None else None
-        model_kwargs = {k: v for k, v in custom_model_cfg.items() if k != "target"}
-
-        if not model_target:
-            raise ValueError("custom_model.target is required when architecture = 'custom'")
-        model_config = {
-            "architecture": "custom",
-            "target": model_target,
-            "kwargs": model_kwargs,
-        }
-    else:
-        model_config = {
-            "architecture": architecture,
-            "latent_dim": int(built_in_model_cfg.get("latent_dim", 128)),
-            "hidden_dim": int(built_in_model_cfg.get("hidden_dim", 256)),
-            "num_layers": int(built_in_model_cfg.get("num_layers", 4)),
-            "num_heads": int(built_in_model_cfg.get("num_heads", 8)),
-            "dropout": float(built_in_model_cfg.get("dropout", 0.1)),
-        }
+    if not model_target:
+        raise ValueError("custom_model.target is required")
+    model_config: dict[str, Any] = {
+        "target": model_target,
+        "kwargs": model_kwargs,
+    }
 
     loss_cfg_raw = train_cfg.get("loss", {})
     if isinstance(loss_cfg_raw, str):

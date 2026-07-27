@@ -16,7 +16,6 @@ if str(SRC_DIR) not in sys.path:
 from v1tovideo.neural_autoencoder.config_parser import parse_neural_ae_experiment_config
 from v1tovideo.neural_autoencoder import (
     build_dataloaders,
-    build_model,
     build_model_from_target,
     evaluate_autoencoder,
     infer_batch_shape,
@@ -62,22 +61,14 @@ def main() -> None:
     train_example = next(iter(train_loader))
     num_tokens, token_dim = infer_batch_shape(train_example)
     LOGGER.info("Inferred model input from training batch | token_dim=%d | padded_num_tokens=%d", token_dim, num_tokens)
-    LOGGER.info("Loading %s model", config.model["architecture"])
-    if str(config.model["architecture"]).lower() == "custom":
-        model_target = str(config.model["target"])
-        model_kwargs = dict(config.model.get("kwargs", {}))
-        model_kwargs.setdefault("num_tokens", num_tokens)
-        model_kwargs.setdefault("token_dim", token_dim)
-        config.model["kwargs"] = model_kwargs
-        model = build_model_from_target(model_target, kwargs=model_kwargs)
-        model_name = model_target
-    else:
-        model_config = dict(config.model)
-        model_config["token_dim"] = token_dim
-        model_config["num_tokens"] = num_tokens
-        config.model = model_config
-        model = build_model(model_config)
-        model_name = str(config.model["architecture"])
+    model_target = str(config.model["target"])
+    model_kwargs = dict(config.model.get("kwargs", {}))
+    model_kwargs.setdefault("num_tokens", num_tokens)
+    model_kwargs.setdefault("token_dim", token_dim)
+    config.model["kwargs"] = model_kwargs
+    LOGGER.info("Loading model: %s", model_target)
+    model = build_model_from_target(model_target, kwargs=model_kwargs)
+    model_name = model_target
     LOGGER.info("Model initialized: %s", model_name)
     wandb_logger.experiment.config.update(
         {

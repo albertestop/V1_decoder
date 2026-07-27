@@ -166,24 +166,22 @@ def main() -> None:
     else:
         print(f"Dataset already present on remote: {remote_dataset_dir}")
 
-    architecture = str(experiment_cfg.get("architecture", experiment_cfg["data"].get("architecture", ""))).lower()
-    if architecture == "custom":
-        target = str(experiment_cfg["custom_model"]["target"])
-        local_model_file = parse_model_file_from_target(target)
-        if local_model_file is not None and local_model_file.exists():
-            remote_model_file = remote_root / local_model_file.relative_to(REPO_ROOT)
-            model_exists_remote = remote_test(ssh_transfer, f"test -f '{remote_model_file}'")
-            if not model_exists_remote:
-                run_cmd(
-                    [
-                        "ssh",
-                        ssh_transfer,
-                        f"mkdir -p '{remote_model_file.parent}'",
-                    ]
-                )
-                run_cmd(["scp", str(local_model_file), f"{ssh_transfer}:{remote_model_file}"])
-            else:
-                print(f"Model file already present on remote: {remote_model_file}")
+    target = str(experiment_cfg["custom_model"]["target"])
+    local_model_file = parse_model_file_from_target(target)
+    if local_model_file is not None and local_model_file.exists():
+        remote_model_file = remote_root / local_model_file.relative_to(REPO_ROOT)
+        model_exists_remote = remote_test(ssh_transfer, f"test -f '{remote_model_file}'")
+        if not model_exists_remote:
+            run_cmd(
+                [
+                    "ssh",
+                    ssh_transfer,
+                    f"mkdir -p '{remote_model_file.parent}'",
+                ]
+            )
+            run_cmd(["scp", str(local_model_file), f"{ssh_transfer}:{remote_model_file}"])
+        else:
+            print(f"Model file already present on remote: {remote_model_file}")
 
     remote_cfg = dict(experiment_cfg)
     remote_cfg["data"] = dict(experiment_cfg["data"])
