@@ -144,12 +144,16 @@ class TAE_v1_00(nn.Module):
         padding_mask: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         indices = torch.argsort(x[:, :, 0], dim=1)
+        restore_indices = torch.argsort(indices, dim=1)
         x = x.gather(1, indices[:, :, None].expand(-1, -1, x.shape[-1]))
         if padding_mask is not None:
             padding_mask = padding_mask.gather(1, indices)
         ids = x[:, :, 0]
         latents = self.encode(x, padding_mask=padding_mask)
         time_pred, rec_pred = self.decode(latents, padding_mask=padding_mask)
+        ids = ids.gather(1, restore_indices)
+        time_pred = time_pred.gather(1, restore_indices[:, :, None].expand(-1, -1, time_pred.shape[-1]))
+        rec_pred = rec_pred.gather(1, restore_indices[:, :, None].expand(-1, -1, rec_pred.shape[-1]))
         return ids, time_pred, rec_pred, latents
 
     @torch.no_grad()

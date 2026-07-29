@@ -10,15 +10,15 @@ pin_memory = true
 drop_last = false
 
 [custom_model]
-target = "v1tovideo.neural_autoencoder.models:TAE_v1"
+target = "v1tovideo.neural_autoencoder.models:TAE_v1_00"
 input_dim = 64
 latent_dim = 64
-latent_num_tokens = 4500
+latent_num_tokens = 3500
 num_layers = 4
 nhead = 4
 
 [train]
-epochs = 20
+epochs = 50
 learning_rate = 1e-4
 weight_decay = 1e-4
 grad_clip_norm = 1.0
@@ -28,9 +28,9 @@ device = "cuda:1"
 # Supported: "masked_mse", "masked_mae", "poisson_nll", "combined"
 name = "combined"
 # Combined options (used only when name = "combined")
-weight_id = 0.1
+weight_id = 0.0
 weight_time = 1.0
-weight_rec = 100.0
+weight_rec = 20.0
 # id supports: "cross_entropy"
 name_id = "cross_entropy"
 # time/rec support: "masked_mse", "masked_mae", "poisson_nll"
