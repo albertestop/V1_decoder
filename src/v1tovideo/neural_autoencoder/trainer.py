@@ -93,15 +93,16 @@ class AutoencoderLightningModule(pl.LightningModule):
             reduction="none",
         )
 
-    def _unpack_batch(self, batch: Any) -> tuple[torch.Tensor, torch.Tensor]:
+    def _unpack_batch(self, batch: Any) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if torch.is_tensor(batch):
             x = batch
             padding_mask = torch.zeros((x.shape[0], x.shape[1]), dtype=torch.bool, device=x.device)
-            return x, padding_mask
+            return x, x, padding_mask
         if isinstance(batch, (tuple, list)) and len(batch) >= 3 and torch.is_tensor(batch[0]) and torch.is_tensor(batch[2]):
             x = batch[0]
             padding_mask = batch[2].bool()
-            return x, padding_mask
+            target = batch[3] if len(batch) >= 4 and torch.is_tensor(batch[3]) else x
+            return x, target, padding_mask
         raise ValueError(f"Unsupported batch format: {type(batch)!r}")
 
     def _masked_mse(self, recon: torch.Tensor, x: torch.Tensor, padding_mask: torch.Tensor) -> torch.Tensor:
@@ -200,42 +201,42 @@ class AutoencoderLightningModule(pl.LightningModule):
     def _compute_loss_and_terms(
         self,
         outputs: dict[str, torch.Tensor],
-        x: torch.Tensor,
+        target: torch.Tensor,
         padding_mask: torch.Tensor,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         if self._loss_name == "masked_mse":
-            return self._masked_mse(outputs["recon"], x, padding_mask), {}
+            return self._masked_mse(outputs["recon"], target, padding_mask), {}
         if self._loss_name == "masked_mae":
-            return self._masked_mae(outputs["recon"], x, padding_mask), {}
+            return self._masked_mae(outputs["recon"], target, padding_mask), {}
         if self._loss_name == "poisson_nll":
-            return self._masked_poisson_nll(outputs["recon"], x, padding_mask), {}
+            return self._masked_poisson_nll(outputs["recon"], target, padding_mask), {}
         if self._loss_name == "combined":
             if not all(k in outputs for k in ("id_logits", "time_pred", "rec_pred")):
                 raise ValueError("combined loss requires model outputs: id_logits, time_pred, rec_pred")
-            return self._masked_combined_loss(outputs["id_logits"], outputs["time_pred"], outputs["rec_pred"], x, padding_mask)
+            return self._masked_combined_loss(outputs["id_logits"], outputs["time_pred"], outputs["rec_pred"], target, padding_mask)
         raise ValueError(f"Unsupported loss_name '{self._loss_name}'")
 
     def _compute_loss(
         self,
         outputs: dict[str, torch.Tensor],
-        x: torch.Tensor,
+        target: torch.Tensor,
         padding_mask: torch.Tensor,
     ) -> torch.Tensor:
-        loss, _ = self._compute_loss_and_terms(outputs, x, padding_mask)
+        loss, _ = self._compute_loss_and_terms(outputs, target, padding_mask)
         return loss
 
     def training_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
-        x, padding_mask = self._unpack_batch(batch)
+        x, target, padding_mask = self._unpack_batch(batch)
         outputs = self._forward_outputs(x, padding_mask)
-        loss = self._compute_loss(outputs, x, padding_mask)
+        loss = self._compute_loss(outputs, target, padding_mask)
         return loss
 
     def validation_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
-        x, padding_mask = self._unpack_batch(batch)
+        x, target, padding_mask = self._unpack_batch(batch)
         outputs = self._forward_outputs(x, padding_mask)
-        loss, terms = self._compute_loss_and_terms(outputs, x, padding_mask)
-        mse = self._masked_mse(outputs["recon"], x, padding_mask)
-        mae = self._masked_mae(outputs["recon"], x, padding_mask)
+        loss, terms = self._compute_loss_and_terms(outputs, target, padding_mask)
+        mse = self._masked_mse(outputs["recon"], target, padding_mask)
+        mae = self._masked_mae(outputs["recon"], target, padding_mask)
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, batch_size=x.shape[0])
         for name, value in terms.items():
             self.log(f"val_{name}", value, on_step=False, on_epoch=True, batch_size=x.shape[0])
@@ -285,9 +286,9 @@ class TrainHistoryCallback(pl.Callback):  # type: ignore[misc]
         with torch.inference_mode():
             for batch in self.train_loader:
                 batch = self._move_batch_to_device(batch, device)
-                x, padding_mask = pl_module._unpack_batch(batch)
+                x, target, padding_mask = pl_module._unpack_batch(batch)
                 outputs = pl_module._forward_outputs(x, padding_mask)
-                loss, terms = pl_module._compute_loss_and_terms(outputs, x, padding_mask)
+                loss, terms = pl_module._compute_loss_and_terms(outputs, target, padding_mask)
                 batch_size = int(x.shape[0])
                 total_loss += float(loss.detach().cpu()) * batch_size
                 for name in self._TERM_NAMES:

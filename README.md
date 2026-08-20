@@ -1,116 +1,96 @@
-# V1-to-Video Reconstruction
+# V1-to-Video Transformer Architecture
 
-This repository contains the initial implementation for a 3-stage pipeline to reconstruct viewed video from V1 neural recordings:
+This project trains autoencoder models for V1 neural activity as part of a video reconstruction pipeline. The current active workflow focuses on the neural autoencoder experiments.
 
-1. Neural autoencoder: compress/decompress neural activity signals.
-2. Image autoencoder: compress/decompress video frames.
-3. Latent mapper: map neural latents to image latents.
+## Current Execution Flow
 
-Stage 1 and stage 2 are now implemented as research skeletons. The image module uses the Stable Diffusion 3 VAE from `diffusers`; the neural module provides configurable baseline architectures intended for rapid experimentation.
+The project is currently executed through the scripts in `scripts/BSC/`.
 
-## Current status
+Main launcher:
 
-- Implemented:
-  - SD3 VAE image compression/decompression module.
-  - Reconstruction quality metrics (MSE, MAE, frequency-domain scores, SSIM, compression ratio).
-  - Single-image and batch image evaluation scripts.
-  - Config-driven neural trace autoencoder skeleton:
-    - Data loading from `.npy` / `.npz` neural trace tensors.
-    - Configurable architecture factory (`mlp`, `transformer`).
-    - Train + validation loop and checkpoint/artifact saving.
-- Planned:
-  - Transformer-based neural-latent -> image-latent mapper.
+```bash
+python scripts/BSC/bsc_neural_ae.py
+```
 
-## Project structure
+This script:
 
-- `src/v1tovideo/image_autoencoder/`: image compression module.
-- `src/v1tovideo/neural_autoencoder/`: neural trace compression module.
-- `src/v1tovideo/latent_mapper/`: placeholder package for latent mapping model.
-- `scripts/`: runnable entrypoints.
-- `docs/`: project documentation and roadmap.
-- `legacy/`: original prototype files retained for reference.
-- `assets/`: tracked sample images/results from the original prototype.
-- `data/`: local datasets (ignored by git).
-- `outputs/`: generated artifacts (ignored by git).
+- reads `scripts/BSC/bsc_neural_ae.conf`;
+- syncs the repository and dataset to BSC;
+- creates `scripts/BSC/generated_remote_config.toml`;
+- submits the BSC job with `scripts/BSC/run_neural_ae_remote.sh`.
+
+On BSC, the submitted job runs:
+
+```bash
+srun python train_ae.py
+```
+
+`scripts/BSC/train_ae.py` then executes:
+
+```bash
+python scripts/BSC/run_neural_ae_experiment.py --config scripts/BSC/generated_remote_config.toml
+```
+
+`scripts/BSC/run_neural_ae_experiment.py` handles the full model training flow: loading the dataset, building the model, training, evaluation, checkpoint saving, metrics, summaries, and reconstruction plots.
+
+## Important Files
+
+- `scripts/BSC/bsc_neural_ae.py`: local launcher for BSC runs.
+- `scripts/BSC/bsc_neural_ae.conf`: BSC SSH, remote path, and config settings.
+- `scripts/BSC/run_neural_ae_remote.sh`: Slurm job script.
+- `scripts/BSC/train_ae.py`: remote wrapper that starts the training entrypoint.
+- `scripts/BSC/run_neural_ae_experiment.py`: main neural autoencoder training script.
+- `scripts/configs/neural_ae_experiment.toml`: base experiment configuration.
+- `src/v1tovideo/neural_autoencoder/`: data loading, models, training, evaluation, and plotting code.
 
 ## Setup
 
+Install the project locally:
+
 ```bash
-python -m venv .venv
-source .venv/bin/activate
 pip install -e .
 ```
 
-If your Hugging Face access requires authentication, export:
+For the BSC environment, use the requirements file in:
 
 ```bash
-export HF_TOKEN=<your_token>
+scripts/BSC/requirements_sci_albert_full.txt
 ```
 
-## Run examples
+## Configuration
 
-Single image:
+Edit the base experiment config before launching:
 
 ```bash
-python scripts/run_image_vae_single.py
+scripts/configs/neural_ae_experiment.toml
 ```
 
-Batch frame evaluation:
+The BSC launcher rewrites local paths for the remote machine and stores the generated config at:
 
 ```bash
-python scripts/run_image_vae_batch.py
+scripts/BSC/generated_remote_config.toml
 ```
 
-Neural autoencoder experiment:
+## Results
+
+Training outputs are saved under the configured output directory, usually:
 
 ```bash
-python scripts/run_neural_ae_experiment.py
+outputs/neural_autoencoder/default_run
 ```
 
-Custom config path:
+To download finished BSC runs:
 
 ```bash
-python scripts/run_image_vae_single.py --config scripts/configs/image_vae_single.toml
-python scripts/run_image_vae_batch.py --config scripts/configs/image_vae_batch.toml
-python scripts/run_neural_ae_experiment.py --config scripts/configs/neural_ae_experiment.toml
-python scripts/generate_synthetic_neural_dataset.py --config scripts/configs/synthetic_neural_dataset.toml
+python scripts/BSC/bsc_neural_ae_down_results.py
 ```
 
-## Neural trace data format
+Downloaded runs are stored locally under:
 
-For `run_neural_ae_experiment.py`, the dataset file must contain a 3D tensor with shape `[N, T, C]`:
+```bash
+outputs/neural_autoencoder/
+```
 
-- `N`: number of examples (trials/windows).
-- `T`: number of time bins per example.
-- `C`: number of recorded neurons/channels.
+## Legacy and Other Scripts
 
-Supported files:
-
-- `.npy` containing one array of shape `[N, T, C]`.
-- `.npz` containing one or more arrays; choose with `data.npz_key`.
-
-proc_session session mode is also supported:
-
-- Set `data.source = "proc_session_responses"`.
-- Set `data.proc_session_root` and `data.sessions = ["session_a", "session_b"]`.
-- The loader reads `<proc_session_root>/<session>/data/responses/*.npy` (configurable subdir/pattern).
-- Each response file is expected as `[n_neurons, length]` and is transposed to `[length, n_neurons]` for model input.
-- With multiple sessions, use `data.channel_mode = "truncate_min"` and/or `data.time_mode = "truncate_min"` if shapes differ.
-
-Synthetic factor dataset mode:
-
-- Run `python scripts/generate_synthetic_neural_dataset.py`.
-- This generates an `.npy` dataset with shape `[N, T, C]` (default `336 x 300 x 5443`) using `K` latent factors.
-- To train on it, set in `scripts/configs/neural_ae_experiment.toml`:
-  - `data.source = "array"`
-  - `data.path = "data/neural/synthetic_factors_336x300x5443.npy"` (or your chosen output path)
-
-## Notes
-
-- Edit config files under `scripts/configs/` to set input/output paths and runtime parameters.
-- For neural autoencoder architecture sweeps, change values in `[model]` (including `architecture`) without code edits.
-- For custom neural models, set `model.architecture = "target"`, then set `model.target` to an import path (`module.submodule.ClassName` or `module.submodule:ClassName`) and pass constructor args in `[model.kwargs]`.
-- A ready-to-edit scaffold is available at `src/v1tovideo/neural_autoencoder/models/template_autoencoder.py`.
-- The current image module resizes frames to `144x256` before encoding. This can be changed in config.
-- `legacy/` preserves the original scripts.
-- `assets/` preserves representative sample inputs and legacy outputs.
+Older local scripts and image autoencoder utilities are still present in `scripts/` and `src/v1tovideo/image_autoencoder/`, but the current project execution path is the BSC neural autoencoder workflow described above.

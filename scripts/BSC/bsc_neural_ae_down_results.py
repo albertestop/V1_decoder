@@ -65,7 +65,7 @@ def main() -> None:
     local_output_base.mkdir(parents=True, exist_ok=True)
 
     found = 0
-    for i in range(30):
+    for i in range(50):
         remote_root = Path("/gpfs/projects/uab103/uab020077/transformer_arch/transformer_arch_" + str(i) + "/transformer_arch")
         remote_output_base = remote_root / "outputs" / "neural_autoencoder"
         remote_run_dir = remote_output_base / "default_run"

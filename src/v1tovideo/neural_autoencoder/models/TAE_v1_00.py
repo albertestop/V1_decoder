@@ -37,7 +37,6 @@ class TAE_v1_00(nn.Module):
 
         self._last_num_tokens: int | None = None
 
-        self.id_embedding = nn.Embedding(num_tokens, input_dim)
         self.time_proj = nn.Linear(1, input_dim)
         self.rec_proj = nn.Linear(1, input_dim)
 
@@ -103,7 +102,6 @@ class TAE_v1_00(nn.Module):
 
         time = x[..., 1].unsqueeze(-1)
         recording = x[..., 2].unsqueeze(-1)
-
 
         t_proj = self.time_proj(time)   # Project them into the same embedding space
         rec_proj = self.rec_proj(recording) # You want each token to become a single vector that encodes:what (id)when (time)value (recording)

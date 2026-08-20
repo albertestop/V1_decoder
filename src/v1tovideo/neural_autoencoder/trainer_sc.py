@@ -93,15 +93,17 @@ def save_reconstruction_plots(
         collate_fn=collate_fn,
     )
 
-    original_trial = []
+    target_trial = []
     recons_trial = []
     for batch in plot_loader:
         with torch.no_grad():
             if torch.is_tensor(batch):
                 x = batch.to(dev)
+                target = x
                 padding_mask = torch.zeros((x.shape[0], x.shape[1]), dtype=torch.bool, device=dev)
             else:
                 x = batch[0].to(dev)
+                target = batch[3].to(dev) if len(batch) >= 4 and torch.is_tensor(batch[3]) else x
                 padding_mask = batch[2].to(dev).bool()
             out = model(x, padding_mask=padding_mask)
             if not isinstance(out, (tuple, list)):
@@ -113,22 +115,22 @@ def save_reconstruction_plots(
             raise ValueError(f"Expected sample_batch shape [B, N, D], got {tuple(x.shape)}")
 
         valid_len = int((~padding_mask[0]).sum().item())
-        original = x[0, :valid_len].detach().cpu().numpy()  # [P, T]
+        target_values = target[0, :valid_len].detach().cpu().numpy()  # [P, T]
         reconstructed = recon[0, :valid_len].detach().cpu().numpy()  # [P, T]
-        original_trial.append(original)
+        target_trial.append(target_values)
         recons_trial.append(reconstructed)
 
-    original_trial = np.array(original_trial, dtype=object)
+    target_trial = np.array(target_trial, dtype=object)
     recons_trial = np.array(recons_trial, dtype=object)
 
     vol_idx = np.random.randint(0, len(recons_trial))
     for token_idx in range(len(recons_trial[0, 0, :])):
         plt.figure(figsize=(16, 6))
-        plt.scatter(np.arange(len(original_trial[vol_idx, :, 0])), original_trial[vol_idx, :, token_idx], label="Original", s=10)
-        plt.scatter(np.arange(len(recons_trial[vol_idx, :, 0])), recons_trial[vol_idx, :, token_idx], label="Recontructed", s=10)
+        plt.scatter(np.arange(len(target_trial[vol_idx, :, 0])), target_trial[vol_idx, :, token_idx], label="Target", s=10)
+        plt.scatter(np.arange(len(recons_trial[vol_idx, :, 0])), recons_trial[vol_idx, :, token_idx], label="Reconstructed", s=10)
         plt.xlabel("Neuron")
         plt.ylabel("Token Value")
-        plt.title(f"Token {token_idx} value of each neuron on a single cycle: before vs after reconstruction")
+        plt.title(f"Token {token_idx} value of each neuron on a single cycle: target vs reconstruction")
         plt.legend()
         plt.tight_layout()
         plt.savefig(output_dir / f"vol_n_token_{token_idx}_val.png")
@@ -137,11 +139,11 @@ def save_reconstruction_plots(
     neuron = np.random.randint(0, len(recons_trial[0, :, 0]))
     for token_idx in range(len(recons_trial[0, 0, :])):
         plt.figure(figsize=(8, 3))
-        plt.plot(np.arange(len(original_trial[:, int(neuron), 0])), original_trial[:, int(neuron), token_idx], label="Original")
-        plt.plot(np.arange(len(recons_trial[:, int(neuron), 0])), recons_trial[:, int(neuron), token_idx], label="Recontructed")
+        plt.plot(np.arange(len(target_trial[:, int(neuron), 0])), target_trial[:, int(neuron), token_idx], label="Target")
+        plt.plot(np.arange(len(recons_trial[:, int(neuron), 0])), recons_trial[:, int(neuron), token_idx], label="Reconstructed")
         plt.xlabel("Cycle n")
         plt.ylabel("Token Value")
-        plt.title(f"Token {token_idx} of neuron {int(original_trial[0, int(neuron), 0])} during trial: before vs after reconstruction")
+        plt.title(f"Token {token_idx} of neuron {int(target_trial[0, int(neuron), 0])} during trial: target vs reconstruction")
         plt.legend()
         plt.tight_layout()
         plt.savefig(output_dir / f"neuron_n_token_{token_idx}_val.png")
@@ -204,15 +206,17 @@ def save_reconstruction_plots(
         collate_fn=collate_fn,
     )
 
-    original_trial = []
+    target_trial = []
     recons_trial = []
     for batch in plot_loader:
         with torch.no_grad():
             if torch.is_tensor(batch):
                 x = batch.to(dev)
+                target = x
                 padding_mask = torch.zeros((x.shape[0], x.shape[1]), dtype=torch.bool, device=dev)
             else:
                 x = batch[0].to(dev)
+                target = batch[3].to(dev) if len(batch) >= 4 and torch.is_tensor(batch[3]) else x
                 padding_mask = batch[2].to(dev).bool()
             out = model(x, padding_mask=padding_mask)
             if not isinstance(out, (tuple, list)):
@@ -224,22 +228,22 @@ def save_reconstruction_plots(
             raise ValueError(f"Expected sample_batch shape [B, N, D], got {tuple(x.shape)}")
 
         valid_len = int((~padding_mask[0]).sum().item())
-        original = x[0, :valid_len].detach().cpu().numpy()  # [P, T]
+        target_values = target[0, :valid_len].detach().cpu().numpy()  # [P, T]
         reconstructed = recon[0, :valid_len].detach().cpu().numpy()  # [P, T]
-        original_trial.append(original)
+        target_trial.append(target_values)
         recons_trial.append(reconstructed)
 
-    original_trial = np.array(original_trial, dtype=object)
+    target_trial = np.array(target_trial, dtype=object)
     recons_trial = np.array(recons_trial, dtype=object)
 
     vol_idx = np.random.randint(0, len(recons_trial))
     for token_idx in range(len(recons_trial[0, 0, :])):
         plt.figure(figsize=(16, 6))
-        plt.scatter(np.arange(len(original_trial[vol_idx, :, 0])), original_trial[vol_idx, :, token_idx], label="Original", s=10)
-        plt.scatter(np.arange(len(recons_trial[vol_idx, :, 0])), recons_trial[vol_idx, :, token_idx], label="Recontructed", s=10)
+        plt.scatter(np.arange(len(target_trial[vol_idx, :, 0])), target_trial[vol_idx, :, token_idx], label="Target", s=10)
+        plt.scatter(np.arange(len(recons_trial[vol_idx, :, 0])), recons_trial[vol_idx, :, token_idx], label="Reconstructed", s=10)
         plt.xlabel("Neuron")
         plt.ylabel("Token Value")
-        plt.title(f"Token {token_idx} value of each neuron on a single cycle: before vs after reconstruction")
+        plt.title(f"Token {token_idx} value of each neuron on a single cycle: target vs reconstruction")
         plt.legend()
         plt.tight_layout()
         plt.savefig(output_dir / f"vol_n_token_{token_idx}_tr.png")
@@ -248,11 +252,11 @@ def save_reconstruction_plots(
     neuron = np.random.randint(0, len(recons_trial[0, :, 0]))
     for token_idx in range(len(recons_trial[0, 0, :])):
         plt.figure(figsize=(8, 3))
-        plt.plot(np.arange(len(original_trial[:, int(neuron), 0])), original_trial[:, int(neuron), token_idx], label="Original")
-        plt.plot(np.arange(len(recons_trial[:, int(neuron), 0])), recons_trial[:, int(neuron), token_idx], label="Recontructed")
+        plt.plot(np.arange(len(target_trial[:, int(neuron), 0])), target_trial[:, int(neuron), token_idx], label="Target")
+        plt.plot(np.arange(len(recons_trial[:, int(neuron), 0])), recons_trial[:, int(neuron), token_idx], label="Reconstructed")
         plt.xlabel("Cycle n")
         plt.ylabel("Token Value")
-        plt.title(f"Token {token_idx} of neuron {int(original_trial[0, int(neuron), 0])} during trial: before vs after reconstruction")
+        plt.title(f"Token {token_idx} of neuron {int(target_trial[0, int(neuron), 0])} during trial: target vs reconstruction")
         plt.legend()
         plt.tight_layout()
         plt.savefig(output_dir / f"neuron_n_token_{token_idx}_tr.png")

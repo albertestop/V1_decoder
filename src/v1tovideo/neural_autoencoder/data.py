@@ -129,13 +129,41 @@ class NeuralTraceDataset(Dataset[torch.Tensor]):
         return self._traces[idx]
 
 
+class NeuralTraceTargetDataset(Dataset[tuple[torch.Tensor, torch.Tensor]]):
+    def __init__(self, traces: NeuralTraceDataset, targets: NeuralTraceDataset) -> None:
+        if len(traces) != len(targets):
+            raise ValueError(f"responses and targets must have the same number of trials, got {len(traces)} and {len(targets)}")
+        if traces.shape != targets.shape:
+            raise ValueError(f"responses and targets must have the same shape, got {traces.shape} and {targets.shape}")
+        self.traces = traces
+        self.targets = targets
+        self.token_dim = traces.token_dim
+        self.max_tokens = traces.max_tokens
+
+    @property
+    def shape(self) -> tuple[int, int, int]:
+        return self.traces.shape
+
+    def __len__(self) -> int:
+        return len(self.traces)
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.traces[idx], self.targets[idx]
+
+
 def collate_padded_trials(
-    batch: list[torch.Tensor],
+    batch: list[torch.Tensor] | list[tuple[torch.Tensor, torch.Tensor]],
     pad_to_tokens: int | None = None,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, ...]:
     """Pad trial tensors and return (x, lengths, padding_mask)."""
     if not batch:
         raise ValueError("Empty batch")
+    if isinstance(batch[0], tuple):
+        x_batch = [item[0] for item in batch]
+        y_batch = [item[1] for item in batch]
+        x, lengths, padding_mask = collate_padded_trials(x_batch, pad_to_tokens=pad_to_tokens)
+        y, _, _ = collate_padded_trials(y_batch, pad_to_tokens=pad_to_tokens)
+        return x, lengths, padding_mask, y
     lengths = torch.tensor([int(x.shape[0]) for x in batch], dtype=torch.long)
     padded = pad_sequence(batch, batch_first=True, padding_value=0.0)  # [B, N_max, D]
     if pad_to_tokens is not None and int(padded.shape[1]) < int(pad_to_tokens):
@@ -146,12 +174,17 @@ def collate_padded_trials(
     return padded, lengths, padding_mask
 
 
-def build_dataset(config: NeuralDataConfig) -> Dataset[torch.Tensor]:
+def build_dataset(config: NeuralDataConfig) -> Dataset[torch.Tensor] | Dataset[tuple[torch.Tensor, torch.Tensor]]:
     """Build one dataset from config."""
-    data_path = config.path / Path('data/responses.npy').expanduser()
-    if data_path is None:
+    if config.path is None:
         raise ValueError("data.path is required")
-    return NeuralTraceDataset.from_file(data_path, npz_key=config.npz_key)
+    data_path = config.path / Path('data/responses.npy').expanduser()
+    dataset = NeuralTraceDataset.from_file(data_path, npz_key=config.npz_key)
+    target_path = config.path / Path('data/targets.npy').expanduser()
+    if not target_path.exists():
+        return dataset
+    targets = NeuralTraceDataset.from_file(target_path, npz_key=config.npz_key)
+    return NeuralTraceTargetDataset(dataset, targets)
 
 
 def build_dataloaders(
