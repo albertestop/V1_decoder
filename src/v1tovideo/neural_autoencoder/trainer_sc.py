@@ -301,8 +301,10 @@ def save_validation_error_stats(model: Any, val_loader: Any, output_dir: Path, d
         stats[f"token_{token}"] = {
             "pred_global_align_with_target": float(global_errs.mean()),
             "pred_global_std": float(global_errs.std()),
-            "mean_align_dist": float(np.mean(trial_means)),
-            "align_dist_std": float(np.std(trial_means)),
+            "mean_align_dist": float(np.mean(np.abs(trial_means))),
+            "align_dist_std": float(np.std(np.abs(trial_means))),
+            "mean_align_error": float(np.mean(trial_means)),
+            "align_error_std": float(np.std(trial_means)),
             "pred_global_distance_to_target": float(global_abs_errs.mean()),
             "global_distance_std": float(global_abs_errs.std()),
             "per_trial": per_trial[token],
