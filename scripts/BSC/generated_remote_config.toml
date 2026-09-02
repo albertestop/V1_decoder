@@ -17,7 +17,7 @@ num_layers = 6
 nhead = 8
 
 [train]
-epochs = 100
+epochs = 120
 learning_rate = 0.0001
 weight_decay = 0.0001
 grad_clip_norm = 1.0
@@ -26,7 +26,7 @@ device = "cuda:0"
 [train.loss]
 name = "combined"
 weight_id = 0.1
-weight_time = 1.5
+weight_time = 5.0
 weight_rec = 10.0
 name_id = "cross_entropy"
 name_time = "masked_mse"

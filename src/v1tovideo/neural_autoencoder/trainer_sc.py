@@ -271,6 +271,7 @@ def save_validation_error_stats(model: Any, val_loader: Any, output_dir: Path, d
     model.eval().to(dev)
     per_trial = {1: [], 2: []}
     all_errors = {1: [], 2: []}
+    all_abs_errors = {1: [], 2: []}
     with torch.no_grad():
         for batch in val_loader:
             x = batch[0].to(dev)
@@ -281,14 +282,29 @@ def save_validation_error_stats(model: Any, val_loader: Any, output_dir: Path, d
             for token in (1, 2):
                 for i in range(x.shape[0]):
                     errs = (pred[i, valid[i], token] - target[i, valid[i], token]).detach().cpu().numpy()
-                    per_trial[token].append({"mean": float(errs.mean()), "std": float(errs.std())})
+                    abs_errs = np.abs(errs)
+                    per_trial[token].append(
+                        {
+                            "pred_align_with_target": float(errs.mean()),
+                            "pred_std": float(errs.std()),
+                            "pred_distance_to_target": float(abs_errs.mean()),
+                            "distance_std": float(abs_errs.std()),
+                        }
+                    )
                     all_errors[token].append(errs)
+                    all_abs_errors[token].append(abs_errs)
     stats = {}
     for token in (1, 2):
-        errs = np.concatenate(all_errors[token])
+        trial_means = [errs.mean() for errs in all_errors[token]]
+        global_errs = np.concatenate(all_errors[token])
+        global_abs_errs = np.concatenate(all_abs_errors[token])
         stats[f"token_{token}"] = {
-            "mean_error": float(errs.mean()),
-            "std_error": float(errs.std()),
+            "pred_global_align_with_target": float(global_errs.mean()),
+            "pred_global_std": float(global_errs.std()),
+            "mean_align_dist": float(np.mean(trial_means)),
+            "align_dist_std": float(np.std(trial_means)),
+            "pred_global_distance_to_target": float(global_abs_errs.mean()),
+            "global_distance_std": float(global_abs_errs.std()),
             "per_trial": per_trial[token],
         }
     with (output_dir / "validation_error_stats.json").open("w", encoding="utf-8") as fp:
