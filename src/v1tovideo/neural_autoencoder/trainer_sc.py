@@ -261,3 +261,35 @@ def save_reconstruction_plots(
         plt.tight_layout()
         plt.savefig(output_dir / f"neuron_n_token_{token_idx}_tr.png")
         plt.close()
+
+
+def save_validation_error_stats(model: Any, val_loader: Any, output_dir: Path, device: str) -> dict[str, Any]:
+    if device.startswith("cuda") and not torch.cuda.is_available():
+        dev = torch.device("cpu")
+    else:
+        dev = torch.device(device)
+    model.eval().to(dev)
+    per_trial = {1: [], 2: []}
+    all_errors = {1: [], 2: []}
+    with torch.no_grad():
+        for batch in val_loader:
+            x = batch[0].to(dev)
+            padding_mask = batch[2].to(dev).bool()
+            target = batch[3].to(dev) if len(batch) >= 4 and torch.is_tensor(batch[3]) else x
+            pred = model.predict(x, padding_mask)
+            valid = ~padding_mask
+            for token in (1, 2):
+                for i in range(x.shape[0]):
+                    errs = (pred[i, valid[i], token] - target[i, valid[i], token]).detach().cpu().numpy()
+                    per_trial[token].append({"mean": float(errs.mean()), "std": float(errs.std())})
+                    all_errors[token].append(errs)
+    stats = {}
+    for token in (1, 2):
+        errs = np.concatenate(all_errors[token])
+        stats[f"token_{token}"] = {
+            "mean_error": float(errs.mean()),
+            "std_error": float(errs.std()),
+            "per_trial": per_trial[token],
+        }
+    with (output_dir / "validation_error_stats.json").open("w", encoding="utf-8") as fp:
+        json.dump(stats, fp, indent=2)

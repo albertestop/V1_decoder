@@ -25,6 +25,7 @@ from v1tovideo.neural_autoencoder import (
 from v1tovideo.neural_autoencoder.trainer_sc import (
     save_reconstruction_plots,
     save_reconstruction_artifacts,
+    save_validation_error_stats,
 )
 
 DEFAULT_CONFIG_PATH = REPO_ROOT / "scripts" / "configs" / "neural_ae_experiment.toml"
@@ -55,6 +56,8 @@ def main() -> None:
 
     LOGGER.info("Preparing dataset")
     train_loader, val_loader, dataset, dataset_map, val_map_idx = build_dataloaders(config.data)
+    with (output_dir / "val_indices.json").open("w", encoding="utf-8") as fp:
+        json.dump([int(i) for i in val_loader.dataset.indices], fp)
     LOGGER.info("Dataset loaded | samples=%d | shape=%s", len(dataset), getattr(dataset, "shape", None))
     train_example = next(iter(train_loader))
     num_tokens, token_dim = infer_batch_shape(train_example)
@@ -121,7 +124,8 @@ def main() -> None:
         config=config.data,
         device=config.train.device
     )
-    LOGGER.info("Saved reconstruction plots")
+    save_validation_error_stats(model, val_loader, output_dir, config.train.device)
+    LOGGER.info("Saved SC data")
 
     LOGGER.info("Run finished | output_dir=%s", output_dir)
     print(summary)
