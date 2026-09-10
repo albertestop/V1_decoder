@@ -28,7 +28,6 @@ if str(SRC_DIR) not in sys.path:
 from v1tovideo.neural_autoencoder.config_parser import parse_neural_ae_experiment_config
 from v1tovideo.neural_autoencoder import (
     build_dataloaders,
-    build_model,
     build_model_from_target,
     infer_batch_shape,
     save_reconstruction_plots,
@@ -37,12 +36,17 @@ from v1tovideo.neural_autoencoder import (
 
 
 
-arr = np.random.rand(120, 10, 3)
+z = torch.rand(3, 10, 3)
 
-print(arr[0, :, :])
-print(arr[-1, :, :])
+print(z)
 
-indices = np.argsort(arr[:, :, 0], axis=1)
-arr_sorted = np.take_along_axis(arr, indices[:, :, None], axis=1)
-print(arr_sorted[0, :, :])
-print(arr_sorted[-1, :, :])
+scores = torch.rand(z.shape[1], device=z.device)
+
+keep = scores.topk(8).indices
+keep = keep.sort().values
+
+print(keep)
+
+z = z[:, keep]
+
+print(z)

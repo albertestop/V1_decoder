@@ -52,7 +52,7 @@ def main() -> None:
     output_dir = config.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    shutil.copy(DEFAULT_CONFIG_PATH, output_dir / "config.toml")
+    shutil.copy(config_path, output_dir / "config.toml")
 
     LOGGER.info("Preparing dataset")
     train_loader, val_loader, dataset, dataset_map, val_map_idx = build_dataloaders(config.data)
@@ -101,6 +101,10 @@ def main() -> None:
         summary["compression_ratio"] = float((token_dim * num_tokens) / latent_dim)
     else:
         summary["compression_ratio"] = None
+
+    if hasattr(model, "keep"):
+        with (output_dir / "kept_neuron_indices.json").open("w", encoding="utf-8") as fp:
+            json.dump([int(i) for i in model.keep.detach().cpu().tolist()], fp, indent=2)
 
     with (output_dir / "history.json").open("w", encoding="utf-8") as fp:
         json.dump(history, fp, indent=2)
