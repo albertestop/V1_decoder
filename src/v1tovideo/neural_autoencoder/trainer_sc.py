@@ -126,12 +126,15 @@ def save_reconstruction_plots(
     vol_idx = np.random.randint(0, len(recons_trial))
     for token_idx in range(len(recons_trial[0, 0, :])):
         plt.figure(figsize=(16, 6))
-        plt.scatter(np.arange(len(target_trial[vol_idx, :, 0])), target_trial[vol_idx, :, token_idx], label="Target", s=10)
-        plt.scatter(np.arange(len(recons_trial[vol_idx, :, 0])), recons_trial[vol_idx, :, token_idx], label="Reconstructed", s=10)
+        error = (
+            recons_trial[vol_idx, :, token_idx]
+            - target_trial[vol_idx, :, token_idx]
+        )
+        plt.bar(np.arange(len(error)), error, width=1)
+        plt.axhline(0, color="black", linewidth=1)
         plt.xlabel("Neuron")
         plt.ylabel("Token Value")
-        plt.title(f"Token {token_idx} value of each neuron on a single cycle: target vs reconstruction")
-        plt.legend()
+        plt.title(f"Token {token_idx}  reconstruction error of each neuron on a single cyclen")
         plt.tight_layout()
         plt.savefig(output_dir / f"vol_n_token_{token_idx}_val.png")
         plt.close()
