@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -324,7 +325,7 @@ class TrainHistoryCallback(pl.Callback):  # type: ignore[misc]
             metrics[f"train_{name}"] = total_terms[name] / denom if name in seen_terms else float("nan")
         return metrics
 
-    def _log_epoch_row(self, trainer: Any, row: dict[str, float]) -> None:
+    def _log_epoch_row(self, trainer: Any, row: dict[str, Any]) -> None:
         epoch = row["epoch"]
         if epoch in self._logged_epochs:
             return
@@ -332,12 +333,13 @@ class TrainHistoryCallback(pl.Callback):  # type: ignore[misc]
             return
         self._logged_epochs.add(epoch)
         LOGGER.info(
-            "Epoch %d/%d | train_loss=%.6f | val_loss=%.6f | epoch_time=%.2fs",
+            "Epoch %d/%d | train_loss=%.6f | val_loss=%.6f | epoch_time=%.2fs | epoch_end=%s",
             int(epoch),
             trainer.max_epochs,
             row["train_loss"],
             row["val_loss"],
             row["epoch_time_sec"],
+            row["epoch_end_time"],
         )
 
     def on_train_epoch_start(self, trainer: Any, pl_module: Any) -> None:
@@ -355,6 +357,7 @@ class TrainHistoryCallback(pl.Callback):  # type: ignore[misc]
             for name, value in self._latest_train_terms.items():
                 self.history[-1][f"train_{name}"] = value
             self.history[-1]["epoch_time_sec"] = float(time.perf_counter() - self._epoch_start_time)
+            self.history[-1]["epoch_end_time"] = datetime.now().isoformat(timespec="seconds")
             self._log_epoch_row(trainer, self.history[-1])
 
     def on_validation_epoch_end(self, trainer: Any, pl_module: Any) -> None:
@@ -371,6 +374,7 @@ class TrainHistoryCallback(pl.Callback):  # type: ignore[misc]
                 for name in self._TERM_NAMES
             },
             "epoch_time_sec": float(time.perf_counter() - self._epoch_start_time),
+            "epoch_end_time": datetime.now().isoformat(timespec="seconds"),
         }
         self.history.append(row)
         self._log_epoch_row(trainer, row)
