@@ -8,9 +8,9 @@ import numpy as np
 class TAE_v1_02_1(nn.Module):
     """
 
-        Like TAE_v1 but the same random subset in each trial is 
-        the one removed for compression
-        Input order -> slice removing always the same random subset
+        Like TAE_v1 but encode preserving input order 
+        -> remove certain neurons (based on their id)
+        -> read tokens in the place of the removed neurons
         We compress the token n. 
         We add them back by generating random parameter array, 
         transforming it with some transformer layers, and finally
@@ -37,6 +37,7 @@ class TAE_v1_02_1(nn.Module):
         self.latent_num_tokens = int(latent_num_tokens)
 
         self._last_num_tokens: int | None = None
+        self._last_keep_mask: torch.Tensor | None = None
 
         keep = torch.rand(self.num_tokens).topk(self.latent_num_tokens).indices
         self.register_buffer("keep", keep.sort().values)
@@ -121,7 +122,9 @@ class TAE_v1_02_1(nn.Module):
 
         z = self.to_latent(x)
 
-        z = z[:, self.keep]
+        keep_mask = (id.unsqueeze(-1) == self.keep.to(id.device)).any(dim=-1)
+        self._last_keep_mask = keep_mask
+        z = z[keep_mask].view(z.shape[0], self.latent_num_tokens, z.shape[-1])
 
         return z
 
@@ -133,7 +136,13 @@ class TAE_v1_02_1(nn.Module):
 
         readdition_init = self.readd_tokens.expand(z.shape[0], -1, -1)
         readdition = self.readd_transform(readdition_init)
-        x = torch.concatenate([z, readdition], axis=1)
+
+        keep_mask = self._last_keep_mask
+        if keep_mask is None:
+            raise ValueError("decode requires encode to be called first")
+        x = z.new_empty(z.shape[0], self.num_tokens, z.shape[-1])
+        x[keep_mask] = z.reshape(-1, z.shape[-1])
+        x[~keep_mask] = readdition.reshape(-1, z.shape[-1])
 
         x = self.from_latent(x)
 
