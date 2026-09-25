@@ -157,10 +157,17 @@ def save_reconstruction_plots(
     epochs = [d["epoch"] for d in history]
     train_loss = [d["train_loss"] for d in history]
     val_loss = [d["val_loss"] for d in history]
+    def smooth(values, window=10):
+        if len(values) < window:
+            return values
+        kernel = np.ones(window) / window
+        return np.convolve(values, kernel, mode="same")
 
     plt.figure()
-    plt.plot(epochs, train_loss, label="Train Loss")
-    plt.plot(epochs, val_loss, label="Validation Loss")
+    plt.plot(epochs, train_loss, color="C0", alpha=0.25, label="Train Loss")
+    plt.plot(epochs, val_loss, color="C1", alpha=0.25, label="Validation Loss")
+    plt.plot(epochs, smooth(train_loss), color="C0", label="Train Loss Smoothed")
+    plt.plot(epochs, smooth(val_loss), color="C1", label="Validation Loss Smoothed")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.title("Training and Validation Loss")
@@ -179,8 +186,10 @@ def save_reconstruction_plots(
         for ax, (name, title) in zip(axes, component_losses):
             train_comp_loss = [d.get(f"train_loss_{name}", np.nan) for d in history]
             val_comp_loss = [d.get(f"val_loss_{name}", np.nan) for d in history]
-            ax.plot(epochs, train_comp_loss, label=f"Train {title}")
-            ax.plot(epochs, val_comp_loss, label=f"Validation {title}")
+            ax.plot(epochs, train_comp_loss, color="C0", alpha=0.25, label=f"Train {title}")
+            ax.plot(epochs, val_comp_loss, color="C1", alpha=0.25, label=f"Validation {title}")
+            ax.plot(epochs, smooth(train_comp_loss), color="C0", label=f"Train {title} Smoothed")
+            ax.plot(epochs, smooth(val_comp_loss), color="C1", label=f"Validation {title} Smoothed")
             ax.set_ylabel("Loss")
             ax.set_title(title)
             ax.legend()
