@@ -304,7 +304,10 @@ class TrainHistoryCallback(pl.Callback):  # type: ignore[misc]
         device = pl_module.device
 
         with torch.inference_mode():
-            for batch in self.train_loader:
+            max_batches = max(1, int(0.2 * len(self.train_loader)))
+            for batch_idx, batch in enumerate(self.train_loader):
+                if batch_idx >= max_batches:
+                    break
                 batch = self._move_batch_to_device(batch, device)
                 x, target, padding_mask = pl_module._unpack_batch(batch)
                 outputs = pl_module._forward_outputs(x, padding_mask)
