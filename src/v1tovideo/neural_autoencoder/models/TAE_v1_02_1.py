@@ -135,7 +135,7 @@ class TAE_v1_02_1(nn.Module):
     ) -> torch.Tensor:
 
         readdition_init = self.readd_tokens.expand(z.shape[0], -1, -1)
-        readdition = self.readd_transform(readdition_init)
+        readdition = self.readd_transform(readdition_init).to(dtype=z.dtype)
 
         keep_mask = self._last_keep_mask
         if keep_mask is None:
