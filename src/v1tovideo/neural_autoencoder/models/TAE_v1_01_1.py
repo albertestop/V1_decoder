@@ -5,11 +5,11 @@ from torch import nn
 import numpy as np
 
 
-class TAE_v1_01(nn.Module):
+class TAE_v1_01_1(nn.Module):
     """
 
-        Like TAE_v1 but neuron order is shuffled before each fwd pass.
-        Shuffle neurons (different perm each fwd pass) -> slice.
+        Like TAE_v1 but neuron order is shuffled before each.
+        Shuffle neurons in a fixed random order -> slice.
         We compress the token n. 
         We add them back by generating random parameter array, 
         transforming it with some transformer layers, and finally
@@ -36,6 +36,7 @@ class TAE_v1_01(nn.Module):
         self.latent_num_tokens = int(latent_num_tokens)
 
         self._last_num_tokens: int | None = None
+        self.register_buffer("perm", torch.randperm(self.num_tokens))
 
         self.id_embedding = nn.Embedding(num_tokens, input_dim)
         self.time_proj = nn.Linear(1, input_dim)
@@ -98,7 +99,7 @@ class TAE_v1_01(nn.Module):
             
     def encode(self, x: torch.Tensor, padding_mask: torch.Tensor | None = None) -> torch.Tensor:
         self.encode_sc(x, padding_mask)
-        perm = torch.argsort(torch.rand(x.shape[:2], device=x.device), dim=1)
+        perm = self.perm.unsqueeze(0).expand(x.shape[0], -1)
         x = x.gather(1, perm.unsqueeze(-1).expand_as(x))
         padding_mask = padding_mask.gather(1, perm)
 

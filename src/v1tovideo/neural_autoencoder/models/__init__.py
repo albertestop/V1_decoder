@@ -5,6 +5,7 @@ from .TAE_v0_2 import TAE_v0_2
 from .TAE_v1 import TAE_v1
 from .TAE_v1_00 import TAE_v1_00
 from .TAE_v1_01 import TAE_v1_01
+from .TAE_v1_01_1 import TAE_v1_01_1
 from .TAE_v1_02 import TAE_v1_02
 from .TAE_v1_03 import TAE_v1_03
 from .TAE_v1_1 import TAE_v1_1

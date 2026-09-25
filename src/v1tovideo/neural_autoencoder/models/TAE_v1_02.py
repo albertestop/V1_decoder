@@ -10,6 +10,7 @@ class TAE_v1_02(nn.Module):
 
         Like TAE_v1 but neurons are ordered before each inference 
         and the same random subset in each trial is the one removed for compression
+        ID order -> slice removing always the same random subset
         We compress the token n. 
         We add them back by generating random parameter array, 
         transforming it with some transformer layers, and finally
