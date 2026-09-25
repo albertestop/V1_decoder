@@ -25,31 +25,11 @@ from v1tovideo.neural_autoencoder import (
 from v1tovideo.neural_autoencoder.trainer_sc import (
     save_reconstruction_plots,
     save_reconstruction_artifacts,
-    save_validation_error_stats,
 )
+from v1tovideo.neural_autoencoder.wandb_comp import *
 
 DEFAULT_CONFIG_PATH = REPO_ROOT / "scripts" / "configs" / "neural_ae_experiment.toml"
 LOGGER = logging.getLogger(__name__)
-
-
-def next_run_dir(output_root: Path) -> Path:
-    output_root.mkdir(parents=True, exist_ok=True)
-    used_indices: list[int] = []
-    for path in output_root.iterdir():
-        if not path.is_dir() or not path.name.startswith("run_"):
-            continue
-        suffix = path.name.removeprefix("run_")
-        if suffix.isdigit():
-            used_indices.append(int(suffix))
-
-    next_idx = max(used_indices, default=-1) + 1
-    while True:
-        run_dir = output_root / f"run_{next_idx}"
-        try:
-            run_dir.mkdir()
-            return run_dir
-        except FileExistsError:
-            next_idx += 1
 
 
 def main() -> None:
@@ -69,16 +49,14 @@ def main() -> None:
     LOGGER.info("Using config: %s", config_path)
     config = parse_neural_ae_experiment_config(config_path)
 
-    output_dir = next_run_dir(config.output_dir.parent)
-    config.output_dir = output_dir
-    LOGGER.info("Using output directory: %s", output_dir)
+    output_dir = config.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    shutil.copy(config_path, output_dir / "config.toml")
+    shutil.copy(DEFAULT_CONFIG_PATH, output_dir / "config.toml")
+    wandb_logger = build_wandb_logger(config, config_path)
 
     LOGGER.info("Preparing dataset")
     train_loader, val_loader, dataset, dataset_map, val_map_idx = build_dataloaders(config.data)
-    with (output_dir / "val_indices.json").open("w", encoding="utf-8") as fp:
-        json.dump([int(i) for i in val_loader.dataset.indices], fp)
     LOGGER.info("Dataset loaded | samples=%d | shape=%s", len(dataset), getattr(dataset, "shape", None))
     train_example = next(iter(train_loader))
     num_tokens, token_dim = infer_batch_shape(train_example)
@@ -92,7 +70,15 @@ def main() -> None:
     model = build_model_from_target(model_target, kwargs=model_kwargs)
     model_name = model_target
     LOGGER.info("Model initialized: %s", model_name)
-
+    wandb_logger.experiment.config.update(
+        {
+            "input": {"token_dim": token_dim, "num_tokens": num_tokens},
+            "model_name": model_name,
+            "model": wandb_json_safe(config.model),
+        },
+        allow_val_change=True,
+    )
+    wandb_logger.watch(model, log="all", log_freq=100)
     latent_dim = int(config.model["latent_dim"]) if "latent_dim" in config.model else None
 
     LOGGER.info("Training started | epochs=%d | device=%s", config.train.epochs, config.train.device)
@@ -101,6 +87,7 @@ def main() -> None:
         train_loader=train_loader,
         val_loader=val_loader,
         config=config.train,
+        logger=wandb_logger,
     )
 
     eval_metrics = evaluate_autoencoder(model=model, dataloader=val_loader, device=config.train.device)
@@ -123,15 +110,20 @@ def main() -> None:
     else:
         summary["compression_ratio"] = None
 
-    if hasattr(model, "keep"):
-        with (output_dir / "kept_neuron_indices.json").open("w", encoding="utf-8") as fp:
-            json.dump([int(i) for i in model.keep.detach().cpu().tolist()], fp, indent=2)
-
     with (output_dir / "history.json").open("w", encoding="utf-8") as fp:
         json.dump(history, fp, indent=2)
 
     with (output_dir / "summary.json").open("w", encoding="utf-8") as fp:
         json.dump(summary, fp, indent=2)
+    wandb_logger.log_metrics(
+        {
+            "eval/val_mse": summary["val_mse"],
+            "eval/val_mae": summary["val_mae"],
+            "eval/train_loss": summary["train_loss"],
+            "eval/val_loss": summary["val_loss"],
+        }
+    )
+    wandb_logger.experiment.summary.update(wandb_json_safe(summary))
 
     save_reconstruction_artifacts(
         model=model,
@@ -149,10 +141,11 @@ def main() -> None:
         config=config.data,
         device=config.train.device
     )
-    save_validation_error_stats(model, val_loader, output_dir, config.train.device)
-    LOGGER.info("Saved SC data")
+    LOGGER.info("Saved reconstruction plots")
+    save_wandb_outputs(wandb_logger, output_dir)
 
     LOGGER.info("Run finished | output_dir=%s", output_dir)
+    wandb_logger.experiment.finish()
     print(summary)
 
 
