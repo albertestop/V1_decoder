@@ -38,7 +38,9 @@ class TAE_v1_01_1(nn.Module):
         self.latent_num_tokens = int(latent_num_tokens)
 
         self._last_num_tokens: int | None = None
-        self.register_buffer("perm", torch.randperm(self.num_tokens))
+        perm = torch.randperm(self.num_tokens)
+        self.register_buffer("perm", perm)
+        self.register_buffer("keep", perm[:self.latent_num_tokens].clone())
 
         self.id_embedding = nn.Embedding(num_tokens, input_dim)
         self.time_proj = nn.Linear(1, input_dim)
