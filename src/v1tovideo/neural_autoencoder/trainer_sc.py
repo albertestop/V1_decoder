@@ -321,9 +321,52 @@ def save_validation_error_stats(model: Any, val_loader: Any, output_dir: Path, d
     else:
         dev = torch.device(device)
     model.eval().to(dev)
-    per_trial = {1: [], 2: []}
-    all_errors = {1: [], 2: []}
-    all_abs_errors = {1: [], 2: []}
+    has_keep = hasattr(model, "keep")
+    keep = getattr(model, "keep", [])
+    if torch.is_tensor(keep):
+        keep = keep.detach().cpu().tolist()
+    keep_ids = set(map(int, keep)) if len(keep) > 0 else set()
+    keep_tensor = torch.tensor(list(keep_ids))
+
+    def make_accumulators():
+        return {1: [], 2: []}, {1: [], 2: []}, {1: [], 2: []}
+
+    def add_errors(per_trial, all_errors, all_abs_errors, token, errs):
+        if len(errs) == 0:
+            return
+        abs_errs = np.abs(errs)
+        per_trial[token].append(
+            {
+                "pred_align_with_target": float(errs.mean()),
+                "pred_std": float(errs.std()),
+                "pred_distance_to_target": float(abs_errs.mean()),
+                "distance_std": float(abs_errs.std()),
+            }
+        )
+        all_errors[token].append(errs)
+        all_abs_errors[token].append(abs_errs)
+
+    def compute_stats(per_trial, all_errors, all_abs_errors):
+        stats = {}
+        for token in (1, 2):
+            trial_means = [errs.mean() for errs in all_errors[token]]
+            global_errs = np.concatenate(all_errors[token])
+            global_abs_errs = np.concatenate(all_abs_errors[token])
+            stats[f"token_{token}"] = {
+                "pred_global_align_with_target": float(global_errs.mean()),
+                "pred_global_std": float(global_errs.std()),
+                "pred_global_distance_to_target": float(global_abs_errs.mean()),
+                "global_distance_std": float(global_abs_errs.std()),
+                "mean_align_dist": float(np.mean(np.abs(trial_means))),
+                "align_dist_std": float(np.std(np.abs(trial_means))),
+                "mean_align_error": float(np.mean(trial_means)),
+                "align_error_std": float(np.std(trial_means)),
+                "per_trial": per_trial[token],
+            }
+        return stats
+
+    per_trial, all_errors, all_abs_errors = make_accumulators()
+    rem_per_trial, rem_all_errors, rem_all_abs_errors = make_accumulators()
     with torch.no_grad():
         for batch in val_loader:
             x = batch[0].to(dev)
@@ -333,33 +376,18 @@ def save_validation_error_stats(model: Any, val_loader: Any, output_dir: Path, d
             valid = ~padding_mask
             for token in (1, 2):
                 for i in range(x.shape[0]):
-                    errs = (pred[i, valid[i], token] - target[i, valid[i], token]).detach().cpu().numpy()
-                    abs_errs = np.abs(errs)
-                    per_trial[token].append(
-                        {
-                            "pred_align_with_target": float(errs.mean()),
-                            "pred_std": float(errs.std()),
-                            "pred_distance_to_target": float(abs_errs.mean()),
-                            "distance_std": float(abs_errs.std()),
-                        }
-                    )
-                    all_errors[token].append(errs)
-                    all_abs_errors[token].append(abs_errs)
-    stats = {}
-    for token in (1, 2):
-        trial_means = [errs.mean() for errs in all_errors[token]]
-        global_errs = np.concatenate(all_errors[token])
-        global_abs_errs = np.concatenate(all_abs_errors[token])
-        stats[f"token_{token}"] = {
-            "pred_global_align_with_target": float(global_errs.mean()),
-            "pred_global_std": float(global_errs.std()),
-            "pred_global_distance_to_target": float(global_abs_errs.mean()),
-            "global_distance_std": float(global_abs_errs.std()),
-            "mean_align_dist": float(np.mean(np.abs(trial_means))),
-            "align_dist_std": float(np.std(np.abs(trial_means))),
-            "mean_align_error": float(np.mean(trial_means)),
-            "align_error_std": float(np.std(trial_means)),
-            "per_trial": per_trial[token],
-        }
+                    trial_valid = valid[i]
+                    errs = (pred[i, trial_valid, token] - target[i, trial_valid, token]).detach().cpu().numpy()
+                    add_errors(per_trial, all_errors, all_abs_errors, token, errs)
+                    if has_keep:
+                        non_keep = ~torch.isin(target[i, :, 0].detach().cpu(), keep_tensor)
+                        rem_valid = trial_valid.detach().cpu() & non_keep
+                        rem_errs = (pred[i, rem_valid.to(dev), token] - target[i, rem_valid.to(dev), token]).detach().cpu().numpy()
+                        add_errors(rem_per_trial, rem_all_errors, rem_all_abs_errors, token, rem_errs)
+    stats = compute_stats(per_trial, all_errors, all_abs_errors)
     with (output_dir / "validation_error_stats.json").open("w", encoding="utf-8") as fp:
         json.dump(stats, fp, indent=2)
+    if has_keep:
+        rem_stats = compute_stats(rem_per_trial, rem_all_errors, rem_all_abs_errors)
+        with (output_dir / "rem_neuron_validation_error_stats.json").open("w", encoding="utf-8") as fp:
+            json.dump(rem_stats, fp, indent=2)
