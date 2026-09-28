@@ -15,6 +15,30 @@ from torch.utils.data import DataLoader, Dataset, Subset
 from v1tovideo.neural_autoencoder.data import collate_padded_trials
 
 
+def plot_neuron_data_evo(target_trial, recons_trial, neuron, token_idx, save_path):
+    plt.figure(figsize=(8, 3))
+    plt.plot(np.arange(len(target_trial[:, int(neuron), 0])), target_trial[:, int(neuron), token_idx], label="Target")
+    plt.plot(np.arange(len(recons_trial[:, int(neuron), 0])), recons_trial[:, int(neuron), token_idx], label="Reconstructed")
+    plt.xlabel("Cycle n")
+    plt.ylabel("Token Value")
+    plt.title(f"Token {token_idx} of neuron {int(target_trial[0, int(neuron), 0])} during trial: target vs reconstruction")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.close()
+
+def plot_vol_error(error, token_idx, save_path):
+    plt.figure(figsize=(16, 6))
+    plt.bar(np.arange(len(error)), error, width=1)
+    plt.axhline(0, color="black", linewidth=1)
+    plt.xlabel("Neuron")
+    plt.ylabel("Token Value")
+    plt.title(f"Token {token_idx}  reconstruction error of each neuron on a single cycle n")
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.close()
+
+
 def save_reconstruction_artifacts(
     model: nn.Module,
     sample_batch: Any,
@@ -76,6 +100,10 @@ def save_reconstruction_plots(
         dev = torch.device("cpu")
     else: dev = torch.device(device)
     model.eval().to(dev)
+    keep = getattr(model, "keep", [])
+    if torch.is_tensor(keep):
+        keep = keep.detach().cpu().tolist()
+    keep_ids = set(map(int, keep)) if len(keep) > 0 else set()
 
     plot_trial_idx = np.random.choice(val_map_idx)
     plot_rows_start, plot_rows_end = map(int, dataset_map[f"{plot_trial_idx}"]["dataset_rows"].split(","))
@@ -125,32 +153,35 @@ def save_reconstruction_plots(
 
     vol_idx = np.random.randint(0, len(recons_trial))
     for token_idx in range(len(recons_trial[0, 0, :])):
-        plt.figure(figsize=(16, 6))
         error = (
             recons_trial[vol_idx, :, token_idx]
             - target_trial[vol_idx, :, token_idx]
         )
-        plt.bar(np.arange(len(error)), error, width=1)
-        plt.axhline(0, color="black", linewidth=1)
-        plt.xlabel("Neuron")
-        plt.ylabel("Token Value")
-        plt.title(f"Token {token_idx}  reconstruction error of each neuron on a single cyclen")
-        plt.tight_layout()
-        plt.savefig(output_dir / f"vol_n_token_{token_idx}_val.png")
-        plt.close()
+        save_path = output_dir / f"vol_n_token_{token_idx}_val.png"
+        plot_vol_error(error, token_idx, save_path)
+        if keep_ids:
+            keep_mask = np.isin(target_trial[vol_idx, :, 0], list(keep_ids))
+            non_keep_idx = np.flatnonzero(~keep_mask)
+            error = (
+                recons_trial[vol_idx, non_keep_idx, token_idx]
+                - target_trial[vol_idx, non_keep_idx, token_idx]
+            )
+            save_path = output_dir / f"rem_neuron_vol_n_token_{token_idx}_val.png"
+            plot_vol_error(error, token_idx, save_path)
 
     neuron = np.random.randint(0, len(recons_trial[0, :, 0]))
+    if keep_ids:
+        keep_mask = np.isin(target_trial[vol_idx, :, 0], list(keep_ids))
+        non_keep_idx = np.flatnonzero(~keep_mask)
+        if len(non_keep_idx) > 0:
+            rem_neuron_idx = np.random.choice(non_keep_idx)
     for token_idx in range(len(recons_trial[0, 0, :])):
-        plt.figure(figsize=(8, 3))
-        plt.plot(np.arange(len(target_trial[:, int(neuron), 0])), target_trial[:, int(neuron), token_idx], label="Target")
-        plt.plot(np.arange(len(recons_trial[:, int(neuron), 0])), recons_trial[:, int(neuron), token_idx], label="Reconstructed")
-        plt.xlabel("Cycle n")
-        plt.ylabel("Token Value")
-        plt.title(f"Token {token_idx} of neuron {int(target_trial[0, int(neuron), 0])} during trial: target vs reconstruction")
-        plt.legend()
-        plt.tight_layout()
-        plt.savefig(output_dir / f"neuron_n_token_{token_idx}_val.png")
-        plt.close()
+        save_path = output_dir / f"neuron_n_token_{token_idx}_val.png"
+        plot_neuron_data_evo(target_trial, recons_trial, neuron, token_idx, save_path)
+        if keep_ids:
+            if len(non_keep_idx) > 0:
+                save_path = output_dir / f"rem_neuron_n_token_{token_idx}_val.png"
+                plot_neuron_data_evo(target_trial, recons_trial, rem_neuron_idx, token_idx, save_path)
 
     with open(os.path.join(output_dir, 'history.json'), 'r') as file:
         history = json.load(file)
@@ -253,32 +284,35 @@ def save_reconstruction_plots(
 
     vol_idx = np.random.randint(0, len(recons_trial))
     for token_idx in range(len(recons_trial[0, 0, :])):
-        plt.figure(figsize=(16, 6))
         error = (
             recons_trial[vol_idx, :, token_idx]
             - target_trial[vol_idx, :, token_idx]
         )
-        plt.bar(np.arange(len(error)), error, width=1)
-        plt.axhline(0, color="black", linewidth=1)
-        plt.xlabel("Neuron")
-        plt.ylabel("Token Value")
-        plt.title(f"Token {token_idx}  reconstruction error of each neuron on a single cyclen")
-        plt.tight_layout()
-        plt.savefig(output_dir / f"vol_n_token_{token_idx}_tr.png")
-        plt.close()
+        save_path = output_dir / f"vol_n_token_{token_idx}_tr.png"
+        plot_vol_error(error, token_idx, save_path)
+        if keep_ids:
+            keep_mask = np.isin(target_trial[vol_idx, :, 0], list(keep_ids))
+            non_keep_idx = np.flatnonzero(~keep_mask)
+            error = (
+                recons_trial[vol_idx, non_keep_idx, token_idx]
+                - target_trial[vol_idx, non_keep_idx, token_idx]
+            )
+            save_path = output_dir / f"rem_neuron_vol_n_token_{token_idx}_tr.png"
+            plot_vol_error(error, token_idx, save_path)
 
     neuron = np.random.randint(0, len(recons_trial[0, :, 0]))
+    if keep_ids:
+        keep_mask = np.isin(target_trial[vol_idx, :, 0], list(keep_ids))
+        non_keep_idx = np.flatnonzero(~keep_mask)
+        if len(non_keep_idx) > 0:
+            rem_neuron_idx = np.random.choice(non_keep_idx)
     for token_idx in range(len(recons_trial[0, 0, :])):
-        plt.figure(figsize=(8, 3))
-        plt.plot(np.arange(len(target_trial[:, int(neuron), 0])), target_trial[:, int(neuron), token_idx], label="Target")
-        plt.plot(np.arange(len(recons_trial[:, int(neuron), 0])), recons_trial[:, int(neuron), token_idx], label="Reconstructed")
-        plt.xlabel("Cycle n")
-        plt.ylabel("Token Value")
-        plt.title(f"Token {token_idx} of neuron {int(target_trial[0, int(neuron), 0])} during trial: target vs reconstruction")
-        plt.legend()
-        plt.tight_layout()
-        plt.savefig(output_dir / f"neuron_n_token_{token_idx}_tr.png")
-        plt.close()
+        save_path = output_dir / f"neuron_n_token_{token_idx}_tr.png"
+        plot_neuron_data_evo(target_trial, recons_trial, neuron, token_idx, save_path)
+        if keep_ids:
+            if len(non_keep_idx) > 0:
+                save_path = output_dir / f"rem_neuron_n_token_{token_idx}_tr.png"
+                plot_neuron_data_evo(target_trial, recons_trial, rem_neuron_idx, token_idx, save_path)
 
 
 def save_validation_error_stats(model: Any, val_loader: Any, output_dir: Path, device: str) -> dict[str, Any]:
