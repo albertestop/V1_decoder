@@ -8,8 +8,10 @@ import numpy as np
 class TAE_v1_01_1(nn.Module):
     """
 
-        Like TAE_v1 but neuron order is shuffled before each.
-        Shuffle neurons in a fixed random order -> slice.
+        Like TAE_v1 but:
+        -> neuron order is shuffled in a fixed random order
+        -> slice last n neurons
+        -> output is in a fixed random order
         We compress the token n. 
         We add them back by generating random parameter array, 
         transforming it with some transformer layers, and finally

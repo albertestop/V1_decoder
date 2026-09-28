@@ -8,8 +8,9 @@ import numpy as np
 class TAE_v1_02_1(nn.Module):
     """
 
-        Like TAE_v1 but encode preserving input order 
-        -> remove certain neurons (based on their id)
+        Like TAE_v1 but:
+        -> input with og dataset, without changing neuron order 
+        -> remove certain random neurons (based on their id)
         -> read tokens in the place of the removed neurons
         We compress the token n. 
         We add them back by generating random parameter array, 
