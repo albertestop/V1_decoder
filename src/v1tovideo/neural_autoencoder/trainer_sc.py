@@ -160,8 +160,11 @@ def save_reconstruction_plots(
     def smooth(values, window=10):
         if len(values) < window:
             return values
+        values = np.asarray(values)
         kernel = np.ones(window) / window
-        return np.convolve(values, kernel, mode="same")
+        pad_left = window // 2
+        pad_right = window - 1 - pad_left
+        return np.convolve(np.pad(values, (pad_left, pad_right), mode="edge"), kernel, mode="valid")
 
     plt.figure()
     plt.plot(epochs, train_loss, color="C0", alpha=0.25, label="Train Loss")
