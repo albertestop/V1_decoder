@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import math
+import tempfile
 import time
 from datetime import datetime
 from dataclasses import dataclass
@@ -9,6 +11,7 @@ from typing import Any
 
 import torch
 import pytorch_lightning as pl
+from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 import torch.nn.functional as F
 from torch import nn
 from torch.optim import AdamW
@@ -393,20 +396,41 @@ def train_autoencoder(
     """Train neural autoencoder with PyTorch Lightning and return epoch history."""
     lightning_model = AutoencoderLightningModule(model=model, config=config)
     history_callback = TrainHistoryCallback(train_loader)
-    train_start = time.perf_counter()
-    trainer = pl.Trainer(
-        max_epochs=config.epochs,
-        logger=logger,
-        enable_checkpointing=False,
-        enable_model_summary=False,
-        num_sanity_val_steps=0,
-        precision="bf16-mixed",
-        gradient_clip_val=float(config.grad_clip_norm) if config.grad_clip_norm is not None else 0.0,
-        enable_progress_bar=False,
-        callbacks=[history_callback],
-        **_lightning_trainer_kwargs(config.device),
+    early_stopping_callback = EarlyStopping(
+        monitor="val_loss",
+        mode="min",
+        patience=math.ceil(float(config.epochs) / 10.0),
     )
-    trainer.fit(lightning_model, train_dataloaders=train_loader, val_dataloaders=val_loader)
+    train_start = time.perf_counter()
+    with tempfile.TemporaryDirectory(prefix="neural_ae_best_") as checkpoint_dir:
+        checkpoint_callback = ModelCheckpoint(
+            dirpath=checkpoint_dir,
+            monitor="val_loss",
+            mode="min",
+            save_top_k=1,
+            save_weights_only=True,
+        )
+        trainer = pl.Trainer(
+            max_epochs=config.epochs,
+            logger=logger,
+            enable_checkpointing=True,
+            enable_model_summary=False,
+            num_sanity_val_steps=0,
+            precision="bf16-mixed",
+            gradient_clip_val=float(config.grad_clip_norm) if config.grad_clip_norm is not None else 0.0,
+            enable_progress_bar=False,
+            callbacks=[history_callback, early_stopping_callback, checkpoint_callback],
+            **_lightning_trainer_kwargs(config.device),
+        )
+        trainer.fit(lightning_model, train_dataloaders=train_loader, val_dataloaders=val_loader)
+        if checkpoint_callback.best_model_path:
+            checkpoint = torch.load(checkpoint_callback.best_model_path, map_location="cpu")
+            lightning_model.load_state_dict(checkpoint["state_dict"])
+            LOGGER.info(
+                "Restored best model | best_model_path=%s | best_val_loss=%.6f",
+                checkpoint_callback.best_model_path,
+                checkpoint_callback.best_model_score.item(),
+            )
     LOGGER.info("Training completed | total_time=%.2fs", time.perf_counter() - train_start)
     return history_callback.history
 
