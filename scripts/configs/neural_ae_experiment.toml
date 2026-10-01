@@ -16,7 +16,8 @@ latent_dim = 64
 latent_num_tokens = 512
 num_layers = 4
 nhead = 4
-dropout = 0.1
+t_dropout = 0.0
+trans_dropout = 0.10
 head_dropout = 0.0
 
 [train]
@@ -26,14 +27,14 @@ learning_rate = 1e-4
 weight_decay = 1e-4
 grad_clip_norm = 1.0
 #default device = "cuda:1"
-device = "cuda:0"
+device = "cuda:1"
 
 [train.loss]
 # Supported: "masked_mse", "masked_mae", "poisson_nll", "combined"
 name = "combined"
 # Combined options (used only when name = "combined")
-weight_id = 0.1
-weight_time = 20.0
+weight_id = 0.05
+weight_time = 10.0
 weight_rec = 10.0
 # id supports: "cross_entropy"
 name_id = "cross_entropy"

@@ -28,8 +28,9 @@ class TAE_v1_01_1(nn.Module):
         nhead: int = 4,
         num_layers: int = 2,
         num_tokens: int | None = None,
+        t_input_dropout: float = 0.0,
         trans_dropout: float = 0.1,
-        head_dropout: float = 0.1,
+        head_dropout: float = 0.0,
     ) -> None:
         super().__init__()
         self.outputs = ['logit', 'value', 'value']
@@ -48,6 +49,7 @@ class TAE_v1_01_1(nn.Module):
         self.time_proj = nn.Linear(1, input_dim)
         self.rec_proj = nn.Linear(1, input_dim)
 
+        self.time_input_dropout = nn.Dropout(p=t_input_dropout)
         self.fusion_proj = nn.Sequential(
             nn.LayerNorm(3 * input_dim),
             nn.Linear(3 * input_dim, input_dim),
@@ -124,6 +126,8 @@ class TAE_v1_01_1(nn.Module):
         id_emb = self.id_embedding(id)  # A dictionary where each token has a trainable vector to identify it
         t_proj = self.time_proj(time)   # Project them into the same embedding space
         rec_proj = self.rec_proj(recording) # You want each token to become a single vector that encodes:what (id)when (time)value (recording)
+
+        t_proj = self.time_input_dropout(t_proj)
 
         x = torch.cat([id_emb, t_proj, rec_proj], dim=-1)
         x = self.fusion_proj(x)
