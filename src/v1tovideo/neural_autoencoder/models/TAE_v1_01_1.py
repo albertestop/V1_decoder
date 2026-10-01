@@ -28,6 +28,8 @@ class TAE_v1_01_1(nn.Module):
         nhead: int = 4,
         num_layers: int = 2,
         num_tokens: int | None = None,
+        trans_dropout: float = 0.1,
+        head_dropout: float = 0.1,
     ) -> None:
         super().__init__()
         self.outputs = ['logit', 'value', 'value']
@@ -55,6 +57,7 @@ class TAE_v1_01_1(nn.Module):
             d_model=input_dim,
             nhead=nhead,
             batch_first=True,
+            dropout=trans_dropout,
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
@@ -74,15 +77,19 @@ class TAE_v1_01_1(nn.Module):
             d_model=latent_dim,
             nhead=nhead,
             batch_first=True,
+            dropout=trans_dropout,
         )
         self.readd_transform = nn.TransformerEncoder(readdition_layer, num_layers=num_layers)
 
         decoder_layer = nn.TransformerEncoderLayer(
             d_model=input_dim,
             nhead=nhead,
-            batch_first=True
+            batch_first=True,
+            dropout=trans_dropout,
         )
         self.decoder = nn.TransformerEncoder(decoder_layer, num_layers=num_layers)
+
+        self.head_dropout = nn.Dropout(head_dropout)
 
         self.id_head = nn.Linear(input_dim, num_tokens)
         self.time_head = nn.Linear(input_dim, 1)       
@@ -143,8 +150,9 @@ class TAE_v1_01_1(nn.Module):
 
         x = self.decoder(x, src_key_padding_mask=padding_mask)
 
+
         id_logits = self.id_head(x)         # classification over IDs
-        time_pred = self.time_head(x)       # regression
+        time_pred = self.time_head(self.head_dropout(x))       # regression
         rec_pred = self.rec_head(x)         # regression
 
         return id_logits, time_pred, rec_pred

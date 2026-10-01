@@ -13,18 +13,20 @@ drop_last = false
 target = "v1tovideo.neural_autoencoder.models:TAE_v1_01_1"
 input_dim = 64
 latent_dim = 64
-latent_num_tokens = 384
+latent_num_tokens = 512
 num_layers = 4
 nhead = 4
+dropout = 0.1
+head_dropout = 0.0
 
 [train]
-epochs = 200
+epochs = 300
 learning_rate = 1e-4
 #lr_start = 2e-4 #Comment this whole line to use no lr schedule
 weight_decay = 1e-4
 grad_clip_norm = 1.0
 #default device = "cuda:1"
-device = "cuda:1"
+device = "cuda:0"
 
 [train.loss]
 # Supported: "masked_mse", "masked_mae", "poisson_nll", "combined"
