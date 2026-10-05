@@ -22,10 +22,17 @@ class NeuralDataConfig:
 
     batch_size: int = 32
     val_split: float = 0.1
+    val_trial_selection: str = "random"
     shuffle_train: bool = True
     num_workers: int = 0
     pin_memory: bool = True
     drop_last: bool = False
+
+
+FIXED_VAL_TRIALS: dict[str, list[int]] = {
+    "run_183": [1, 4, 11, 23, 29, 49, 56, 67, 85, 96, 101, 107, 119],
+    "run_179": [0, 25, 43, 59, 63, 81, 83, 89, 94, 108, 111, 116, 127],
+}
 
 
 def infer_batch_shape(batch: Any) -> tuple[int, int]:
@@ -192,7 +199,7 @@ def build_dataloaders(
 ) -> tuple[DataLoader[Any], DataLoader[Any], Dataset[torch.Tensor]]:
     """ 
         Build train/validation dataloaders from configured neural data source.
-        Validation split is the data of n random trials.
+        Validation split is selected from configured experiment trial ids.
     """
     dataset = build_dataset(config)
     with open(config.path / Path('trial_dataset_map.json').expanduser(), "r") as f:
@@ -204,9 +211,25 @@ def build_dataloaders(
         raise ValueError("data.val_split must be in (0, 1)")
 
     val_n_exp_trials = int(round(n_exp_trials * val_split))
-    val_exp_trials_idx = np.random.randint(0, n_exp_trials, val_n_exp_trials)
+    val_trial_selection = config.val_trial_selection
+    if val_trial_selection == "random":
+        val_exp_trials_idx = np.random.randint(0, n_exp_trials, val_n_exp_trials)
+    elif val_trial_selection in FIXED_VAL_TRIALS:
+        val_exp_trials_idx = np.array(FIXED_VAL_TRIALS[val_trial_selection], dtype=int)
+    elif val_trial_selection == "run_179_183_random":
+        candidates = sorted(set(FIXED_VAL_TRIALS["run_179"] + FIXED_VAL_TRIALS["run_183"]))
+        if val_n_exp_trials > len(candidates):
+            raise ValueError("data.val_split selects more validation trials than available fixed candidates")
+        val_exp_trials_idx = np.random.choice(candidates, size=val_n_exp_trials, replace=False)
+    else:
+        raise ValueError(
+            "data.val_trial_selection must be one of: random, run_183, run_179, run_179_183_random"
+        )
+
     mask = np.full(len(dataset), False)
     for exp_trial in val_exp_trials_idx:
+        if f"{exp_trial}" not in data_map:
+            raise ValueError(f"Validation trial {exp_trial} is not present in trial_dataset_map.json")
         start, end = map(int, data_map[f"{exp_trial}"]["dataset_rows"].split(","))
         mask[start:end] = True
     val_size = max(1, int(sum(mask)))

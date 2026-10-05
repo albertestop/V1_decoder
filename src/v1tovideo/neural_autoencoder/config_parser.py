@@ -41,6 +41,7 @@ def parse_neural_ae_experiment_config(config_path: Path) -> ExperimentConfig:
         npz_key=str(data_cfg["npz_key"]) if "npz_key" in data_cfg else None,
         batch_size=int(data_cfg.get("batch_size", 32)),
         val_split=float(data_cfg.get("val_split", 0.1)),
+        val_trial_selection=str(data_cfg.get("val_trial_selection", "random")),
         shuffle_train=bool(data_cfg.get("shuffle_train", True)),
         num_workers=int(data_cfg.get("num_workers", 0)),
         pin_memory=bool(data_cfg.get("pin_memory", True)),
