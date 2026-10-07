@@ -26,6 +26,7 @@ from v1tovideo.neural_autoencoder.trainer_sc import (
     save_reconstruction_plots,
     save_reconstruction_artifacts,
     save_validation_error_stats,
+    save_high_mae_trial_plots,
 )
 
 DEFAULT_CONFIG_PATH = REPO_ROOT / "scripts" / "configs" / "neural_ae_experiment.toml"
@@ -150,6 +151,14 @@ def main() -> None:
         device=config.train.device
     )
     save_validation_error_stats(model, val_loader, output_dir, config.train.device)
+    save_high_mae_trial_plots(
+        model=model,
+        val_dataset=val_loader.dataset,
+        train_dataset=train_loader.dataset,
+        dataset_dir=config.data.path,
+        output_dir=output_dir,
+        device=config.train.device,
+    )
     LOGGER.info("Saved SC data")
 
     LOGGER.info("Run finished | output_dir=%s", output_dir)

@@ -391,3 +391,136 @@ def save_validation_error_stats(model: Any, val_loader: Any, output_dir: Path, d
         rem_stats = compute_stats(rem_per_trial, rem_all_errors, rem_all_abs_errors)
         with (output_dir / "rem_neuron_validation_error_stats.json").open("w", encoding="utf-8") as fp:
             json.dump(rem_stats, fp, indent=2)
+
+
+
+def save_high_mae_trial_plots(
+    model: nn.Module,
+    val_dataset: Dataset,
+    train_dataset: Dataset,
+    dataset_dir: Path,
+    output_dir: Path,
+    device: str = "cuda",
+    mae_threshold: float = 0.3,
+    token_idxs: tuple[int, ...] = (1, 2),
+    batch_size: int = 8,
+) -> dict[str, Any]:
+    """Plot train/val trial overlays where per-neuron trial MAE exceeds threshold."""
+    out_dir = Path(output_dir) / "high_mae_trial_plots"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for token_idx in token_idxs:
+        (out_dir / f"token_{int(token_idx)}").mkdir(parents=True, exist_ok=True)
+    dev = torch.device("cpu" if device.startswith("cuda") and not torch.cuda.is_available() else device)
+    model.eval().to(dev)
+    with (Path(dataset_dir) / "trial_dataset_map.json").open("r", encoding="utf-8") as fp:
+        dataset_map = json.load(fp)
+
+    full_dataset = getattr(train_dataset, "dataset", train_dataset)
+    train_rows = {int(i) for i in getattr(train_dataset, "indices", range(len(train_dataset)))}
+    val_rows = {int(i) for i in getattr(val_dataset, "indices", range(len(val_dataset)))}
+
+    def trial_rows(trial_idx):
+        start, end = map(int, dataset_map[str(trial_idx)]["dataset_rows"].split(","))
+        return list(range(start, end))
+
+    def split_rows(trial_idx, split):
+        keep = train_rows if split == "train" else val_rows
+        return [row for row in trial_rows(trial_idx) if row in keep]
+
+    def split_trials(split):
+        keep = train_rows if split == "train" else val_rows
+        return [trial_idx for trial_idx in sorted(map(int, dataset_map)) if any(row in keep for row in trial_rows(trial_idx))]
+
+    def item_array(item):
+        item = item[1] if isinstance(item, tuple) else item
+        return item.detach().cpu().numpy()
+
+    def load_cycles(rows):
+        return np.asarray([item_array(full_dataset[row]) for row in rows], dtype=object)
+
+    def predict_trial(rows):
+        loader = DataLoader(
+            Subset(full_dataset, rows),
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=0,
+            pin_memory=False,
+            drop_last=False,
+            collate_fn=partial(collate_padded_trials, pad_to_tokens=int(getattr(full_dataset, "max_tokens"))),
+        )
+        targets, preds = [], []
+        with torch.no_grad():
+            for batch in loader:
+                x = batch[0].to(dev) if not torch.is_tensor(batch) else batch.to(dev)
+                mask = batch[2].to(dev).bool() if not torch.is_tensor(batch) else torch.zeros(x.shape[:2], dtype=torch.bool, device=dev)
+                target = batch[3].to(dev) if not torch.is_tensor(batch) and len(batch) >= 4 and torch.is_tensor(batch[3]) else x
+                pred = model.predict(x, mask)
+                for i in range(x.shape[0]):
+                    n = int((~mask[i]).sum().item())
+                    targets.append(target[i, :n].detach().cpu().numpy())
+                    preds.append(pred[i, :n].detach().cpu().numpy())
+        return np.asarray(targets, dtype=object), np.asarray(preds, dtype=object)
+
+    def neuron_values(cycles, neuron_id, token_idx):
+        vals = []
+        for cycle in cycles:
+            hit = np.flatnonzero(cycle[:, 0].astype(int) == int(neuron_id))
+            if len(hit):
+                vals.append(float(cycle[int(hit[0]), token_idx]))
+        return np.asarray(vals, dtype=float)
+
+    def plot(groups_by_split, target, pred, split, trial_i, neuron_row, token_idx, mae, save_path):
+        neuron_id = int(target[0][neuron_row, 0])
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        plt.figure(figsize=(24, 24))
+        for name, groups, color, alpha in (("train", groups_by_split["train"], "C0", 0.16), ("validation", groups_by_split["validation"], "C1", 0.35)):
+            labelled = False
+            for cycles in groups:
+                vals = neuron_values(cycles, neuron_id, token_idx)
+                if len(vals):
+                    plt.plot(np.arange(len(vals)), vals, color=color, alpha=alpha, linewidth=0.8, label=name.capitalize() if not labelled else None)
+                    labelled = True
+        x = np.arange(len(target))
+        plt.plot(x, [c[neuron_row, token_idx] for c in target], color="black", linewidth=3.0, label=f"{split} trial {trial_i} target")
+        plt.plot(x, [c[neuron_row, token_idx] for c in pred], color="red", linewidth=3.0, label=f"{split} trial {trial_i} prediction")
+        plt.xlabel("Cycle n within trial")
+        plt.ylabel("Token Value")
+        plt.title(f"Token {token_idx} of neuron {neuron_id}: train and validation trials (MAE={mae:.4f})")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(save_path)
+        plt.close()
+
+    trial_ids = {split: split_trials(split) for split in ("train", "validation")}
+    groups_by_split = {split: [load_cycles(split_rows(trial_i, split)) for trial_i in ids] for split, ids in trial_ids.items()}
+    counts = {int(t): 0 for t in token_idxs}
+    outliers = []
+
+    for split, ids in trial_ids.items():
+        for trial_i in ids:
+            rows = split_rows(trial_i, split)
+            if not rows:
+                continue
+            target, pred = predict_trial(rows)
+            for token_idx in token_idxs:
+                if token_idx < 0 or token_idx >= target[0].shape[1]:
+                    raise ValueError(f"Token index {token_idx} must be in [0, {target[0].shape[1] - 1}]")
+                for neuron_row in range(target[0].shape[0]):
+                    target_vals = np.asarray([c[neuron_row, token_idx] for c in target], dtype=float)
+                    pred_vals = np.asarray([c[neuron_row, token_idx] for c in pred], dtype=float)
+                    mae = float(np.mean(np.abs(pred_vals - target_vals)))
+                    if mae <= mae_threshold:
+                        continue
+                    neuron_id = int(target[0][neuron_row, 0])
+                    outliers.append({"split": split, "trial_idx": int(trial_i), "neuron_id": neuron_id, "neuron_row": int(neuron_row), "token_idx": int(token_idx), "mae": mae, "num_cycles": int(len(target))})
+                    save_path = out_dir / f"token_{token_idx}" / f"{split}_trial_{int(trial_i):03d}_neuron_{neuron_id}_token_{token_idx}_mae_{mae:.3f}.png"
+                    plot(groups_by_split, target, pred, split, int(trial_i), neuron_row, token_idx, mae, save_path)
+                    counts[int(token_idx)] += 1
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with (out_dir / "mae_outliers.json").open("w", encoding="utf-8") as fp:
+        json.dump(outliers, fp, indent=2)
+    with (out_dir / "plot_counts.txt").open("w", encoding="utf-8") as fp:
+        for token_idx in token_idxs:
+            fp.write(f"token_{token_idx}: {counts[int(token_idx)]}\n")
+    return {"outliers": outliers, "plot_counts": counts, "output_dir": str(out_dir)}
