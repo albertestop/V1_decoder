@@ -36,12 +36,12 @@ device = "cuda:1"
 name = "combined"
 # Combined options (used only when name = "combined")
 weight_id = 0.0001
-weight_time = 10.0
+weight_time = 1.0
 weight_rec = 10.0
 # id supports: "cross_entropy"
 name_id = "cross_entropy"
 # time/rec support: "masked_mse", "masked_mae", "poisson_nll"
-name_time = "masked_mae"
+name_time = "masked_mse"
 name_rec = "masked_mse"
 # PoissonNLLLoss options (used only when name = "poisson_nll")
 poisson_log_input = true

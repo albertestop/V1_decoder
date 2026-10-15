@@ -30,10 +30,10 @@ device = "cuda:0"
 [train.loss]
 name = "combined"
 weight_id = 0.0001
-weight_time = 10.0
+weight_time = 1.0
 weight_rec = 10.0
 name_id = "cross_entropy"
-name_time = "masked_mae"
+name_time = "masked_mse"
 name_rec = "masked_mse"
 poisson_log_input = true
 poisson_full = false

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import shutil
 import sys
 from pathlib import Path
 
@@ -65,6 +66,11 @@ def backfill_run(run_dir: Path, device: str | None, mae_threshold: float) -> Non
         state_dict = state_dict["state_dict"]
     model.load_state_dict(state_dict)
 
+    plot_dir = run_dir / "high_mae_trial_plots"
+    if plot_dir.exists():
+        shutil.rmtree(plot_dir)
+        LOGGER.info("Removed existing plots from %s", plot_dir)
+
     result = save_high_mae_trial_plots(
         model=model,
         val_dataset=val_dataset,
@@ -98,7 +104,7 @@ def main() -> None:
         if idx is None or idx < args.start or (args.end is not None and idx > args.end):
             continue
         run_dirs.append((idx, path))
-    run_dirs.sort()
+    run_dirs.sort(reverse=True)
 
     for idx, run_dir in run_dirs:
         required = ["config.toml", "summary.json", "model.pt", "val_indices.json"]

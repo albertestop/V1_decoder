@@ -448,7 +448,7 @@ def save_high_mae_trial_plots(
             drop_last=False,
             collate_fn=partial(collate_padded_trials, pad_to_tokens=int(getattr(full_dataset, "max_tokens"))),
         )
-        targets, preds = [], []
+        inputs, targets, preds = [], [], []
         with torch.no_grad():
             for batch in loader:
                 x = batch[0].to(dev) if not torch.is_tensor(batch) else batch.to(dev)
@@ -457,9 +457,14 @@ def save_high_mae_trial_plots(
                 pred = model.predict(x, mask)
                 for i in range(x.shape[0]):
                     n = int((~mask[i]).sum().item())
+                    inputs.append(x[i, :n].detach().cpu().numpy())
                     targets.append(target[i, :n].detach().cpu().numpy())
                     preds.append(pred[i, :n].detach().cpu().numpy())
-        return np.asarray(targets, dtype=object), np.asarray(preds, dtype=object)
+        return (
+            np.asarray(inputs, dtype=object),
+            np.asarray(targets, dtype=object),
+            np.asarray(preds, dtype=object),
+        )
 
     def neuron_values(cycles, neuron_id, token_idx):
         vals = []
@@ -469,8 +474,21 @@ def save_high_mae_trial_plots(
                 vals.append(float(cycle[int(hit[0]), token_idx]))
         return np.asarray(vals, dtype=float)
 
-    def plot(groups_by_split, target, pred, split, trial_i, neuron_row, token_idx, mae, save_path):
-        neuron_id = int(target[0][neuron_row, 0])
+    def matched_neuron_values(inputs, targets, preds, neuron_id, token_idx):
+        target_vals, pred_vals = [], []
+        for cycle_i, (input_cycle, target_cycle, pred_cycle) in enumerate(zip(inputs, targets, preds)):
+            target_hit = np.flatnonzero(target_cycle[:, 0].astype(int) == int(neuron_id))
+            input_hit = np.flatnonzero(input_cycle[:, 0].astype(int) == int(neuron_id))
+            if len(target_hit) != 1 or len(input_hit) != 1:
+                raise ValueError(
+                    f"Expected one input and target token for neuron {neuron_id} in cycle {cycle_i}, "
+                    f"got {len(input_hit)} input and {len(target_hit)} target tokens"
+                )
+            target_vals.append(float(target_cycle[int(target_hit[0]), token_idx]))
+            pred_vals.append(float(pred_cycle[int(input_hit[0]), token_idx]))
+        return np.asarray(target_vals, dtype=float), np.asarray(pred_vals, dtype=float)
+
+    def plot(groups_by_split, target_vals, pred_vals, split, trial_i, neuron_id, token_idx, mae, save_path):
         save_path.parent.mkdir(parents=True, exist_ok=True)
         plt.figure(figsize=(24, 24))
         for name, groups, color, alpha in (("train", groups_by_split["train"], "C0", 0.16), ("validation", groups_by_split["validation"], "C1", 0.35)):
@@ -480,9 +498,9 @@ def save_high_mae_trial_plots(
                 if len(vals):
                     plt.plot(np.arange(len(vals)), vals, color=color, alpha=alpha, linewidth=0.8, label=name.capitalize() if not labelled else None)
                     labelled = True
-        x = np.arange(len(target))
-        plt.plot(x, [c[neuron_row, token_idx] for c in target], color="black", linewidth=3.0, label=f"{split} trial {trial_i} target")
-        plt.plot(x, [c[neuron_row, token_idx] for c in pred], color="red", linewidth=3.0, label=f"{split} trial {trial_i} prediction")
+        x = np.arange(len(target_vals))
+        plt.plot(x, target_vals, color="black", linewidth=3.0, label=f"{split} trial {trial_i} target")
+        plt.plot(x, pred_vals, color="red", linewidth=3.0, label=f"{split} trial {trial_i} prediction")
         plt.xlabel("Cycle n within trial")
         plt.ylabel("Token Value")
         plt.title(f"Token {token_idx} of neuron {neuron_id}: train and validation trials (MAE={mae:.4f})")
@@ -501,20 +519,21 @@ def save_high_mae_trial_plots(
             rows = split_rows(trial_i, split)
             if not rows:
                 continue
-            target, pred = predict_trial(rows)
+            inputs, target, pred = predict_trial(rows)
             for token_idx in token_idxs:
                 if token_idx < 0 or token_idx >= target[0].shape[1]:
                     raise ValueError(f"Token index {token_idx} must be in [0, {target[0].shape[1] - 1}]")
                 for neuron_row in range(target[0].shape[0]):
-                    target_vals = np.asarray([c[neuron_row, token_idx] for c in target], dtype=float)
-                    pred_vals = np.asarray([c[neuron_row, token_idx] for c in pred], dtype=float)
+                    neuron_id = int(target[0][neuron_row, 0])
+                    target_vals, pred_vals = matched_neuron_values(
+                        inputs, target, pred, neuron_id, token_idx
+                    )
                     mae = float(np.mean(np.abs(pred_vals - target_vals)))
                     if mae <= mae_threshold:
                         continue
-                    neuron_id = int(target[0][neuron_row, 0])
                     outliers.append({"split": split, "trial_idx": int(trial_i), "neuron_id": neuron_id, "neuron_row": int(neuron_row), "token_idx": int(token_idx), "mae": mae, "num_cycles": int(len(target))})
                     save_path = out_dir / f"token_{token_idx}" / f"{split}_trial_{int(trial_i):03d}_neuron_{neuron_id}_token_{token_idx}_mae_{mae:.3f}.png"
-                    plot(groups_by_split, target, pred, split, int(trial_i), neuron_row, token_idx, mae, save_path)
+                    plot(groups_by_split, target_vals, pred_vals, split, int(trial_i), neuron_id, token_idx, mae, save_path)
                     counts[int(token_idx)] += 1
 
     out_dir.mkdir(parents=True, exist_ok=True)
