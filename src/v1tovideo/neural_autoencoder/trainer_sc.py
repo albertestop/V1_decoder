@@ -425,13 +425,13 @@ def save_high_mae_trial_plots(
     for trial_id, trial_info in dataset_map.items():
         trial_index = trial_info["trial_index"]
         i_f_rows = [int(row) for row in trial_info["dataset_rows"].split(",")]
-        trial_rows = range(i_f_rows[0], i_f_rows[1] - 1)
+        trial_rows = range(i_f_rows[0], i_f_rows[1])
 
         responses_exp.append(dataset_inputs[trial_rows])
         targets_exp.append(dataset_targets[trial_rows])
     
-    responses_exp = np.ndarray(responses_exp)
-    targets_exp = np.ndarray(targets_exp)
+    responses_exp = np.asarray(responses_exp)
+    targets_exp = np.asarray(targets_exp)
 
     val_mask = np.array([
         set(map(int, info["dataset_rows"].split(",")[0])).issubset(set(val_rows))
@@ -445,7 +445,6 @@ def save_high_mae_trial_plots(
 
     fig, ax = plt.subplots(figsize=(24, 24))
     alpha = 0.2
-    min_mae = 0.3
     outliers = [0, 0]
     for token_idx, token in enumerate(range(1,3)):
         for exp in range(len(responses_exp)):
@@ -460,7 +459,7 @@ def save_high_mae_trial_plots(
 
         def predict_trial(dataset):
             loader = DataLoader(
-                dataset,
+                Dataset(dataset),
                 batch_size=batch_size,
                 shuffle=False,
                 num_workers=0,
@@ -491,7 +490,7 @@ def save_high_mae_trial_plots(
                 to_pred = responses_exp_val[exp, :, responses_exp_val[exp, :, :, 0] == neuron]
                 inputs, targets, preds = predict_trial(to_pred)
                 mae = float(np.mean(np.abs(preds[:, token] - targets[:, token])))
-                if mae > min_mae:
+                if mae > mae_threshold:
                     to_plot = responses_exp_tr[:, :, responses_exp_tr[exp, :, :, 0] == neuron, token]
                     neuron_tr_trials.set_ydata(np.arange(to_plot.shape[1]), to_plot.T, alpha=0.7, linewidth=0.8, label="Neuron tr trials")
                     mae_trial_input.set_ydata(np.arange(inputs.shape[0]), inputs[:, token], alpha=1, linewidth=1, label="Input")
@@ -504,4 +503,8 @@ def save_high_mae_trial_plots(
     with (out_dir / "plot_counts.txt").open("w", encoding="utf-8") as fp:
         for token_idx in range(2):
             fp.write(f"token_{token_idx}: {outliers[int(token_idx)]}\n")
-    return {"outliers": str(outliers), "output_dir": str(out_dir)}
+    return {
+        "outliers": outliers,
+        "plot_counts": np.sum(outliers),
+        "output_dir": str(out_dir),
+    }
