@@ -25,28 +25,29 @@ SRC_DIR = REPO_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from v1tovideo.neural_autoencoder.config_parser import parse_neural_ae_experiment_config
-from v1tovideo.neural_autoencoder import (
-    build_dataloaders,
-    build_model_from_target,
-    infer_batch_shape,
-    save_reconstruction_plots,
-)
+dataset_map = {
+  "0": {
+    "trial_id": "00438/",
+    "trial_index": 0,
+    "dataset_rows": "0,5"
+  },
+  "1": {
+    "trial_id": "00414/",
+    "trial_index": 1,
+    "dataset_rows": "5,10"
+  },
+  "2": {
+    "trial_id": "00414/",
+    "trial_index": 2,
+    "dataset_rows": "10,15"
+  }
+}
 
-
-
-
-z = torch.rand(3, 10, 3)
-
-print(z)
-
-scores = torch.rand(z.shape[1], device=z.device)
-
-keep = scores.topk(8).indices
-keep = keep.sort().values
-
-print(keep)
-
-z = z[:, keep]
-
-print(z)
+val_rows = [0,1,2,3,4,10,11,12,13,14]
+val_set = set(val_rows)
+val_mask = np.array([
+    set(map(int, info["dataset_rows"].split(",")[0])).issubset(val_set)
+    for info in dataset_map.values()
+])
+train_mask = ~val_mask
+print(train_mask, val_mask)

@@ -43,8 +43,18 @@ def load_model_config(run_dir: Path) -> dict:
     return config.model
 
 
-def backfill_run(run_dir: Path, device: str | None, mae_threshold: float) -> None:
+def backfill_run(
+    run_dir: Path,
+    device: str | None,
+    mae_threshold: float,
+    data_root: Path | None,
+) -> None:
     config = parse_neural_ae_experiment_config(run_dir / "config.toml")
+    if data_root is not None:
+        if config.data.path is None:
+            raise ValueError(f"Run {run_dir.name} does not define a dataset path")
+        config.data.path = data_root / config.data.path.name
+        LOGGER.info("Using local dataset path %s", config.data.path)
     dataset = build_dataset(config.data)
 
     with (run_dir / "val_indices.json").open("r", encoding="utf-8") as fp:
@@ -95,6 +105,7 @@ def main() -> None:
     parser.add_argument("--start", type=int, default=162)
     parser.add_argument("--end", type=int, default=None)
     parser.add_argument("--device", type=str, default=None)
+    parser.add_argument("--data-root", type=Path, default=None, help="Local root containing saved dataset directories")
     parser.add_argument("--mae-threshold", type=float, default=0.3)
     args = parser.parse_args()
 
@@ -113,7 +124,7 @@ def main() -> None:
             LOGGER.warning("Skipping %s; missing %s", run_dir.name, ", ".join(missing))
             continue
         LOGGER.info("Backfilling %s", run_dir.name)
-        backfill_run(run_dir, args.device, args.mae_threshold)
+        backfill_run(run_dir, args.device, args.mae_threshold, args.data_root)
 
 
 if __name__ == "__main__":
