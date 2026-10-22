@@ -405,106 +405,122 @@ def save_high_mae_trial_plots(
     token_idxs: tuple[int, ...] = (1, 2),
     batch_size: int = 8,
 ) -> dict[str, Any]:
+    """Save plots for validation-trial neurons whose token MAE is high.
+
+    The saved arrays use ``[row, neuron, token]`` indexing. Rows are first
+    assigned to the saved train/validation split, then grouped into complete
+    trials using ``trial_dataset_map.json``.
+    """
     out_dir = Path(output_dir) / "high_mae_trial_plots"
     out_dir.mkdir(parents=True, exist_ok=True)
     for token_idx in token_idxs:
         (out_dir / f"token_{int(token_idx)}").mkdir(parents=True, exist_ok=True)
+
     dev = torch.device("cpu" if device.startswith("cuda") and not torch.cuda.is_available() else device)
     model.eval().to(dev)
 
-    dataset_inputs = np.load(Path(dataset_dir) / Path('data/responses.npy').expanduser())
-    dataset_targets = np.load(Path(dataset_dir) / Path('data/targets.npy').expanduser())
+    dataset_inputs = np.load(Path(dataset_dir) / "data" / "responses.npy", allow_pickle=True).astype(np.float32)
+    dataset_targets = np.load(Path(dataset_dir) / "data" / "targets.npy", allow_pickle=True).astype(np.float32)
+    if dataset_inputs.ndim != 3 or dataset_targets.shape != dataset_inputs.shape:
+        raise ValueError("responses.npy and targets.npy must have shape [row, neuron, token]")
+
     with (Path(dataset_dir) / "trial_dataset_map.json").open("r", encoding="utf-8") as fp:
         dataset_map = json.load(fp)
     with (Path(output_dir) / "val_indices.json").open("r", encoding="utf-8") as fp:
-        val_rows = json.load(fp)
+        val_rows = {int(row) for row in json.load(fp)}
 
-    responses_exp = []
-    targets_exp = []
+    def trial_sort_key(item: tuple[str, dict[str, Any]]) -> int:
+        trial_id, trial_info = item
+        return int(trial_info.get("trial_index", trial_id))
 
-    for trial_id, trial_info in dataset_map.items():
-        trial_index = trial_info["trial_index"]
-        i_f_rows = [int(row) for row in trial_info["dataset_rows"].split(",")]
-        trial_rows = range(i_f_rows[0], i_f_rows[1])
+    train_trials: list[tuple[str, np.ndarray, np.ndarray]] = []
+    val_trials: list[tuple[str, np.ndarray, np.ndarray]] = []
+    for trial_id, trial_info in sorted(dataset_map.items(), key=trial_sort_key):
+        start, end = (int(value) for value in trial_info["dataset_rows"].split(","))
+        row_indices = set(range(start, end))
+        if row_indices <= val_rows:
+            val_trials.append((trial_id, dataset_inputs[start:end], dataset_targets[start:end]))
+        elif row_indices.isdisjoint(val_rows):
+            train_trials.append((trial_id, dataset_inputs[start:end], dataset_targets[start:end]))
+        else:
+            raise ValueError(f"Trial {trial_id} is split between train and validation rows")
 
-        responses_exp.append(dataset_inputs[trial_rows])
-        targets_exp.append(dataset_targets[trial_rows])
-    
-    responses_exp = np.asarray(responses_exp)
-    targets_exp = np.asarray(targets_exp)
+    if not train_trials or not val_trials:
+        raise ValueError("Expected at least one complete train trial and one complete validation trial")
+    train_inputs = np.stack([inputs for _, inputs, _ in train_trials])
+    train_targets = np.stack([target for _, _, target in train_trials])
+    val_trial_ids = [trial_id for trial_id, _, _ in val_trials]
+    val_inputs = np.stack([inputs for _, inputs, _ in val_trials])
+    val_targets = np.stack([target for _, _, target in val_trials])
+    if (
+        train_inputs.shape[1:] != val_inputs.shape[1:]
+        or train_targets.shape[1:] != val_targets.shape[1:]
+    ):
+        raise ValueError("All trials must have the same [row, neuron, token] shape")
 
-    val_mask = np.array([
-        set(map(int, info["dataset_rows"].split(",")[0])).issubset(set(val_rows))
-        for info in dataset_map.values()
-    ])
-    train_mask = ~val_mask
-    responses_exp_tr = responses_exp[train_mask]
-    targets_exp_tr = targets_exp[train_mask]
-    responses_exp_val = responses_exp[val_mask]
-    targets_exp_val = targets_exp[val_mask]
+    def predict_trial(trial_inputs: np.ndarray) -> np.ndarray:
+        predictions: list[np.ndarray] = []
+        with torch.no_grad():
+            for start in range(0, len(trial_inputs), batch_size):
+                x = torch.from_numpy(trial_inputs[start : start + batch_size]).to(dev)
+                padding_mask = torch.zeros(x.shape[:2], dtype=torch.bool, device=dev)
+                predictions.append(model.predict(x, padding_mask).detach().cpu().numpy())
+        return np.concatenate(predictions, axis=0)
 
-    fig, ax = plt.subplots(figsize=(24, 24))
-    alpha = 0.2
-    outliers = [0, 0]
-    for token_idx, token in enumerate(range(1,3)):
-        for exp in range(len(responses_exp)):
-            for neuron in range(len(responses_exp[0, 0])):
-                to_plot = targets_exp_tr[exp, :, responses_exp[exp, :, :, 0] == neuron, token]
-                ax.plot(np.arange(len(to_plot)), to_plot, alpha=alpha, linewidth=0.8, label="Tr trials")
+    plot_counts = {f"token_{int(token_idx)}": 0 for token_idx in token_idxs}
+    row_positions = np.arange(train_targets.shape[1])
+    for token_idx in token_idxs:
+        if not 0 <= token_idx < train_targets.shape[-1]:
+            raise ValueError(f"Token index {token_idx} is outside the dataset token dimension")
 
-        plot_gen = np.full((responses_exp_tr.shape[0], responses_exp_tr.shape[1]), 1)
-        neuron_tr_trials, = ax.plot(np.arange(plot_gen.shape[1]), plot_gen.T, alpha=0.7, linewidth=0.8, label="Neuron tr trials")
-        mae_trial_input, = ax.plot(np.arange(plot_gen[0].shape[0]), plot_gen[0], alpha=1, linewidth=1, label="Input")
-        mae_trial_target, = ax.plot(np.arange(plot_gen[0].shape[0]), plot_gen[0], alpha=1, linewidth=1, label="Target")
+        fig, ax = plt.subplots(figsize=(24, 24))
+        for neuron_idx in range(train_targets.shape[2]):
+            ax.plot(row_positions, train_targets[:, :, neuron_idx, token_idx].T, color='lightgrey', alpha=0.1, linewidth=0.5, label='_nolegend_')
 
-        def predict_trial(dataset):
-            loader = DataLoader(
-                Dataset(dataset),
-                batch_size=batch_size,
-                shuffle=False,
-                num_workers=0,
-                pin_memory=False,
-                drop_last=False,
-                collate_fn=partial(collate_padded_trials, pad_to_tokens=int(getattr(dataset, "max_tokens"))),
-            )
-            inputs, targets, preds = [], [], []
-            with torch.no_grad():
-                for batch in loader:
-                    x = batch[0].to(dev) if not torch.is_tensor(batch) else batch.to(dev)
-                    mask = batch[2].to(dev).bool() if not torch.is_tensor(batch) else torch.zeros(x.shape[:2], dtype=torch.bool, device=dev)
-                    target = batch[3].to(dev) if not torch.is_tensor(batch) and len(batch) >= 4 and torch.is_tensor(batch[3]) else x
-                    pred = model.predict(x, mask)
-                    for i in range(x.shape[0]):
-                        n = int((~mask[i]).sum().item())
-                        inputs.append(x[i, :n].detach().cpu().numpy())
-                        targets.append(target[i, :n].detach().cpu().numpy())
-                        preds.append(pred[i, :n].detach().cpu().numpy())
-            return (
-                np.asarray(inputs, dtype=object),
-                np.asarray(targets, dtype=object),
-                np.asarray(preds, dtype=object),
-            )
+        for trial_id, trial_inputs, trial_targets in zip(val_trial_ids, val_inputs, val_targets):
+            trial_predictions = predict_trial(trial_inputs)
+            for neuron_idx in range(train_targets.shape[2]):
+                mae = float(np.mean(np.abs(
+                    trial_predictions[:, neuron_idx, token_idx] - trial_targets[:, neuron_idx, token_idx]
+                )))
+                if mae <= mae_threshold:
+                    continue
 
-        for exp in range(len(responses_exp_tr)):
-            for neuron in range(len(responses_exp[0, 0])):
-                to_pred = responses_exp_val[exp, :, responses_exp_val[exp, :, :, 0] == neuron]
-                inputs, targets, preds = predict_trial(to_pred)
-                mae = float(np.mean(np.abs(preds[:, token] - targets[:, token])))
-                if mae > mae_threshold:
-                    to_plot = responses_exp_tr[:, :, responses_exp_tr[exp, :, :, 0] == neuron, token]
-                    neuron_tr_trials.set_ydata(np.arange(to_plot.shape[1]), to_plot.T, alpha=0.7, linewidth=0.8, label="Neuron tr trials")
-                    mae_trial_input.set_ydata(np.arange(inputs.shape[0]), inputs[:, token], alpha=1, linewidth=1, label="Input")
-                    mae_trial_target.set_ydata(np.arange(targets.shape[0]), targets[:, token], alpha=1, linewidth=1, label="Target")
-                    plt.title(f"Token {token} of neuron {neuron}: train and validation trials (MAE={mae:.4f})")
-                    save_path = out_dir / f"token_{token}" / f"trial_{exp}_neuron_{neuron}_token_{token_idx}_mae_{mae:.3f}.png"
-                    plt.savefig(save_path)
-                    outliers[token_idx] += 1
+                train_lines = ax.plot(
+                    row_positions, train_targets[:, :, neuron_idx, token_idx].T,
+                    color='darkgrey', alpha=0.3, linewidth=0.7, label="Train target",
+                )
+                target_line, = ax.plot(
+                    row_positions, trial_targets[:, neuron_idx, token_idx],
+                    color='yellow', alpha=1.0, linewidth=1.0, label="Validation target",
+                )
+                prediction_line, = ax.plot(
+                    row_positions, trial_predictions[:, neuron_idx, token_idx],
+                    color='red', alpha=1.0, linewidth=1.0, label="Validation prediction",
+                )
+                ax.set_title(
+                    f"Token {token_idx}, neuron {neuron_idx}, validation trial {trial_id} (MAE={mae:.4f})"
+                )
+                ax.set_xlabel("Row within trial")
+                ax.set_ylabel("Token value")
+                legend = ax.legend()
+                fig.savefig(
+                    out_dir / f"token_{token_idx}" / f"trial_{trial_id}_neuron_{neuron_idx}_mae_{mae:.3f}.png",
+                    bbox_inches="tight",
+                )
+                legend.remove()
+                target_line.remove()
+                prediction_line.remove()
+                for line in train_lines:
+                    line.remove()
+                plot_counts[f"token_{int(token_idx)}"] += 1
+        plt.close(fig)
 
     with (out_dir / "plot_counts.txt").open("w", encoding="utf-8") as fp:
-        for token_idx in range(2):
-            fp.write(f"token_{token_idx}: {outliers[int(token_idx)]}\n")
+        for token_name, count in plot_counts.items():
+            fp.write(f"{token_name}: {count}\n")
     return {
-        "outliers": outliers,
-        "plot_counts": np.sum(outliers),
+        "outliers": plot_counts,
+        "plot_counts": plot_counts,
         "output_dir": str(out_dir),
     }
