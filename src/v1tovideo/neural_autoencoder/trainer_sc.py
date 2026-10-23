@@ -404,6 +404,7 @@ def save_high_mae_trial_plots(
     mae_threshold: float = 0.3,
     token_idxs: tuple[int, ...] = (1, 2),
     batch_size: int = 8,
+    factor: int = 9,
 ) -> dict[str, Any]:
     """Save plots for validation-trial neurons whose token MAE is high.
 
@@ -474,8 +475,8 @@ def save_high_mae_trial_plots(
             raise ValueError(f"Token index {token_idx} is outside the dataset token dimension")
 
         fig, ax = plt.subplots(figsize=(24, 24))
-        for neuron_idx in range(train_targets.shape[2]):
-            ax.plot(row_positions, train_targets[:, :, neuron_idx, token_idx].T, color='lightgrey', alpha=0.1, linewidth=0.5, label='_nolegend_')
+        for neuron_idx in range(np.random.randint(0, factor), train_targets.shape[2], factor):
+            ax.plot(row_positions, train_targets[:, :, neuron_idx, token_idx].T, color='greenyellow', alpha=0.2, linewidth=0.5, label='_nolegend_')
 
         for trial_id, trial_inputs, trial_targets in zip(val_trial_ids, val_inputs, val_targets):
             trial_predictions = predict_trial(trial_inputs)
@@ -488,11 +489,11 @@ def save_high_mae_trial_plots(
 
                 train_lines = ax.plot(
                     row_positions, train_targets[:, :, neuron_idx, token_idx].T,
-                    color='darkgrey', alpha=0.3, linewidth=0.7, label="Train target",
+                    color='darkgrey', alpha=0.5, linewidth=0.7, label="Train target",
                 )
                 target_line, = ax.plot(
                     row_positions, trial_targets[:, neuron_idx, token_idx],
-                    color='yellow', alpha=1.0, linewidth=1.0, label="Validation target",
+                    color='black', alpha=1.0, linewidth=1.0, label="Validation target",
                 )
                 prediction_line, = ax.plot(
                     row_positions, trial_predictions[:, neuron_idx, token_idx],
