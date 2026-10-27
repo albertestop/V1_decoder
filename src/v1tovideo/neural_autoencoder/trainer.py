@@ -386,25 +386,52 @@ class TrainHistoryCallback(pl.Callback):  # type: ignore[misc]
         self._log_epoch_row(trainer, row)
 
 
+class BestModelStateCallback(pl.Callback):  # type: ignore[misc]
+    """Save the best validation model in the same format as ``save_checkpoint``."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.best_val_loss = float("inf")
+
+    def on_validation_epoch_end(self, trainer: Any, pl_module: Any) -> None:
+        val_loss = trainer.callback_metrics.get("val_loss")
+        if val_loss is None:
+            return
+        val_loss = float(val_loss.detach().cpu())
+        if val_loss < self.best_val_loss:
+            self.best_val_loss = val_loss
+            temporary_path = self.path.with_suffix(".tmp")
+            torch.save(pl_module.model.state_dict(), temporary_path)
+            temporary_path.replace(self.path)
+            LOGGER.info("Saved best model | path=%s | val_loss=%.6f", self.path, val_loss)
+
+
 def train_autoencoder(
     model: nn.Module,
     train_loader: DataLoader[Any],
     val_loader: DataLoader[Any],
     config: TrainConfig,
     logger: Any | bool = False,
+    checkpoint_dir: Path | None = None,
 ) -> list[dict[str, float]]:
     """Train neural autoencoder with PyTorch Lightning and return epoch history."""
     lightning_model = AutoencoderLightningModule(model=model, config=config)
     history_callback = TrainHistoryCallback(train_loader)
+    best_model_callback = (
+        BestModelStateCallback(checkpoint_dir / "model.pt") if checkpoint_dir is not None else None
+    )
     early_stopping_callback = EarlyStopping(
         monitor="val_loss",
         mode="min",
         patience=math.ceil(float(config.epochs) / 10.0),
     )
     train_start = time.perf_counter()
-    with tempfile.TemporaryDirectory(prefix="neural_ae_best_") as checkpoint_dir:
+    if checkpoint_dir is not None:
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="neural_ae_best_") as active_checkpoint_dir:
         checkpoint_callback = ModelCheckpoint(
-            dirpath=checkpoint_dir,
+            dirpath=active_checkpoint_dir,
+            filename="best",
             monitor="val_loss",
             mode="min",
             save_top_k=1,
@@ -419,7 +446,12 @@ def train_autoencoder(
             precision="bf16-mixed",
             gradient_clip_val=float(config.grad_clip_norm) if config.grad_clip_norm is not None else 0.0,
             enable_progress_bar=False,
-            callbacks=[history_callback, early_stopping_callback, checkpoint_callback],
+            callbacks=[
+                history_callback,
+                early_stopping_callback,
+                checkpoint_callback,
+                *([best_model_callback] if best_model_callback is not None else []),
+            ],
             **_lightning_trainer_kwargs(config.device),
         )
         trainer.fit(lightning_model, train_dataloaders=train_loader, val_dataloaders=val_loader)

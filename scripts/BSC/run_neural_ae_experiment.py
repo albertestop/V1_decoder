@@ -81,6 +81,7 @@ def main() -> None:
         train_loader=train_loader,
         val_loader=val_loader,
         config=config.train,
+        checkpoint_dir=output_dir,
     )
 
     eval_metrics = evaluate_autoencoder(model=model, dataloader=val_loader, device=config.train.device)
