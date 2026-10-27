@@ -125,6 +125,8 @@ def main() -> None:
     print(f"Remote run directory: {remote_run_dir}")
 
     run_cmd(["ssh", ssh_transfer, f"mkdir -p '{remote_data_root}' '{remote_bsc_dir}'"])
+    run_cmd(["ssh", ssh_transfer, f"rm -rf '{remote_run_dir}'"])
+    print(f"Removed remote run directory: {remote_run_dir}")
 
     run_cmd(
         [

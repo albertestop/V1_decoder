@@ -85,6 +85,12 @@ To download finished BSC runs:
 python scripts/BSC/bsc_neural_ae_down_results.py
 ```
 
+To delete detected remote BSC result directories without downloading them:
+
+```bash
+python scripts/BSC/bsc_neural_ae_delete_results.py
+```
+
 Downloaded runs are stored locally under:
 
 ```bash

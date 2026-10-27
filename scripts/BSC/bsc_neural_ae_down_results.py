@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-
+DELETE_REMOTE=False
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONF = Path(__file__).resolve().parent / "bsc_neural_ae.conf"
 
@@ -77,8 +77,11 @@ def main() -> None:
 
         print(f"Downloading transformer_arch_{i}/default_run -> {local_run_dir}")
         run_cmd(["scp", "-r", f"{ssh_transfer}:{remote_run_dir}/.", str(local_run_dir)])
-        run_cmd(["ssh", ssh_transfer, f"rm -rf '{remote_run_dir}'"])
-        print(f"Downloaded and removed remote: transformer_arch_{i}/default_run")
+        if DELETE_REMOTE: 
+            run_cmd(["ssh", ssh_transfer, f"rm -rf '{remote_run_dir}'"])
+            print(f"Downloaded and removed remote: transformer_arch_{i}/default_run")
+        if not DELETE_REMOTE:
+            print(f"Downloaded remote: transformer_arch_{i}/default_run")
     if found == 0:
         print("No remote default_run directories found.")
 

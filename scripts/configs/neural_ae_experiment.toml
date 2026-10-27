@@ -15,7 +15,7 @@ drop_last = false
 target = "v1tovideo.neural_autoencoder.models:TAE_v1_01_1"
 input_dim = 64
 latent_dim = 64
-latent_num_tokens = 512
+latent_num_tokens = 1024
 num_layers = 4
 nhead = 4
 t_input_dropout = 0.0
@@ -23,7 +23,7 @@ trans_dropout = 0.10
 head_dropout = 0.0
 
 [train]
-epochs = 350
+epochs = 500
 learning_rate = 1e-4
 #lr_start = 2e-4 #Comment this whole line to use no lr schedule
 weight_decay = 1e-4
@@ -41,7 +41,7 @@ weight_rec = 10.0
 # id supports: "cross_entropy"
 name_id = "cross_entropy"
 # time/rec support: "masked_mse", "masked_mae", "poisson_nll"
-name_time = "masked_mse"
+name_time = "masked_mae"
 name_rec = "masked_mse"
 # PoissonNLLLoss options (used only when name = "poisson_nll")
 poisson_log_input = true

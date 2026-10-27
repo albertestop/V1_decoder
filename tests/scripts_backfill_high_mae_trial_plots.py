@@ -22,9 +22,8 @@ from v1tovideo.neural_autoencoder.models import build_model_from_target
 from v1tovideo.neural_autoencoder.trainer_sc import save_high_mae_trial_plots
 
 """
-Execute with /home/albertestop/miniconda3/envs/sci_albert/bin/python   tests/scripts_backf
-ill_high_mae_trial_plots.py   --root outputs/neural_autoencoder   --start 161 --end 202   --data-root /home/albertestop/data/processed_data/tb
-a   --device cuda:1   2>&1 | tee outputs/neural_autoencoder/backfill_161_202.log
+Execute with 
+/home/albertestop/miniconda3/envs/sci_albert/bin/python   tests/scripts_backfill_high_mae_trial_plots.py   --root outputs/neural_autoencoder   --start 161 --end 202   --data-root /home/albertestop/data/processed_data/tba   --device cuda:1   2>&1 | tee outputs/neural_autoencoder/backfill_161_202.log
 """
 
 LOGGER = logging.getLogger(__name__)
