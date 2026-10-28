@@ -405,16 +405,21 @@ def save_high_mae_trial_plots(
     token_idxs: tuple[int, ...] = (1, 2),
     batch_size: int = 8,
     factor: int = 9,
+    weight_time: float = 1.0,
 ) -> dict[str, Any]:
     """Save plots for validation-trial neurons whose token MAE is high.
 
     The saved arrays use ``[row, neuron, token]`` indexing. Rows are first
     assigned to the saved train/validation split, then grouped into complete
-    trials using ``trial_dataset_map.json``.
+    trials using ``trial_dataset_map.json``. When ``weight_time`` is zero,
+    token 1 is not part of the training objective, so its plot count is
+    recorded as ``"NoI"`` (not of interest) without computing its plots.
     """
     out_dir = Path(output_dir) / "high_mae_trial_plots"
     out_dir.mkdir(parents=True, exist_ok=True)
     for token_idx in token_idxs:
+        if token_idx == 1 and weight_time == 0:
+            continue
         (out_dir / f"token_{int(token_idx)}").mkdir(parents=True, exist_ok=True)
 
     dev = torch.device("cpu" if device.startswith("cuda") and not torch.cuda.is_available() else device)
@@ -468,11 +473,16 @@ def save_high_mae_trial_plots(
                 predictions.append(model.predict(x, padding_mask).detach().cpu().numpy())
         return np.concatenate(predictions, axis=0)
 
-    plot_counts = {f"token_{int(token_idx)}": 0 for token_idx in token_idxs}
+    plot_counts: dict[str, int | str] = {
+        f"token_{int(token_idx)}": "NoI" if token_idx == 1 and weight_time == 0 else 0
+        for token_idx in token_idxs
+    }
     row_positions = np.arange(train_targets.shape[1])
     for token_idx in token_idxs:
         if not 0 <= token_idx < train_targets.shape[-1]:
             raise ValueError(f"Token index {token_idx} is outside the dataset token dimension")
+        if token_idx == 1 and weight_time == 0:
+            continue
 
         fig, ax = plt.subplots(figsize=(24, 24))
         for neuron_idx in range(np.random.randint(0, factor), train_targets.shape[2], factor):

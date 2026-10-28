@@ -94,11 +94,12 @@ def backfill_run(
         output_dir=run_dir,
         device=device or config.train.device,
         mae_threshold=mae_threshold,
+        weight_time=config.train.loss_weight_time,
     )
     LOGGER.info(
         "%s wrote %s plots to %s",
         run_dir.name,
-        sum(int(v) for v in result["plot_counts"].values()),
+        sum(v for v in result["plot_counts"].values() if isinstance(v, int)),
         result["output_dir"],
     )
 

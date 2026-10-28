@@ -158,6 +158,7 @@ def main() -> None:
         dataset_dir=config.data.path,
         output_dir=output_dir,
         device=config.train.device,
+        weight_time=config.train.loss_weight_time,
     )
     LOGGER.info("Saved SC data")
 
