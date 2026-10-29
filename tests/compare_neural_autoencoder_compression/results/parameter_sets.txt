@@ -1,0 +1,486 @@
+Parameter sets are identical except for custom_model.latent_num_tokens, train.epochs, and output.dir.
+Outliers are absent when high_mae_trial_plots/plot_counts.txt does not exist.
+
+Parameter set 1
+Parameters:
+{
+  "custom_model": {
+    "input_dim": 64,
+    "latent_dim": 64,
+    "nhead": 4,
+    "num_layers": 4,
+    "target": "v1tovideo.neural_autoencoder.models:TAE_v1_01_1"
+  },
+  "data": {
+    "batch_size": 8,
+    "data_root_path": "/home/albertestop/data/processed_data/tba",
+    "dataset_id": "2025-07-04_04_ESPM154_vol_000_subset_1024_target_random_order",
+    "drop_last": false,
+    "num_workers": 16,
+    "pin_memory": true,
+    "shuffle_train": true,
+    "val_split": 0.1
+  },
+  "output": {},
+  "train": {
+    "device": "cuda:1",
+    "grad_clip_norm": 1.0,
+    "learning_rate": 0.0001,
+    "loss": {
+      "name": "combined",
+      "name_id": "cross_entropy",
+      "name_rec": "masked_mse",
+      "name_time": "masked_mae",
+      "poisson_eps": 1e-08,
+      "poisson_full": false,
+      "poisson_log_input": true,
+      "weight_id": 0.1,
+      "weight_rec": 10.0,
+      "weight_time": 20.0
+    },
+    "weight_decay": 0.0001
+  }
+}
+Runs:
+  run_172: LNT=384, token_1_error=0.0055901031, token_2_error=0.067130253, token_1_outliers=41.0, token_2_outliers=514.0
+  run_170: LNT=512, token_1_error=0.011065639, token_2_error=0.04273092, token_1_outliers=109.0, token_2_outliers=143.0
+  run_171: LNT=512, token_1_error=0.0061768745, token_2_error=0.045296304, token_1_outliers=43.0, token_2_outliers=168.0
+  run_166: LNT=640, token_1_error=0.0048316643, token_2_error=0.032677878, token_1_outliers=27.0, token_2_outliers=132.0
+  run_167: LNT=640, token_1_error=0.0070168492, token_2_error=0.078532405, token_1_outliers=51.0, token_2_outliers=78.0
+  run_165: LNT=768, token_1_error=0.011068362, token_2_error=0.037857249, token_1_outliers=90.0, token_2_outliers=129.0
+  run_162: LNT=896, token_1_error=0.0046806936, token_2_error=0.052212685, token_1_outliers=13.0, token_2_outliers=960.0
+
+Parameter set 2
+Parameters:
+{
+  "custom_model": {
+    "input_dim": 64,
+    "latent_dim": 64,
+    "nhead": 4,
+    "num_layers": 4,
+    "target": "v1tovideo.neural_autoencoder.models:TAE_v1_02_1"
+  },
+  "data": {
+    "batch_size": 8,
+    "data_root_path": "/home/albertestop/data/processed_data/tba",
+    "dataset_id": "2025-07-04_04_ESPM154_vol_000_1024_neurons",
+    "drop_last": false,
+    "num_workers": 16,
+    "pin_memory": true,
+    "shuffle_train": true,
+    "val_split": 0.1
+  },
+  "output": {},
+  "train": {
+    "device": "cuda:0",
+    "grad_clip_norm": 1.0,
+    "learning_rate": 0.0001,
+    "loss": {
+      "name": "combined",
+      "name_id": "cross_entropy",
+      "name_rec": "masked_mse",
+      "name_time": "masked_mae",
+      "poisson_eps": 1e-08,
+      "poisson_full": false,
+      "poisson_log_input": true,
+      "weight_id": 0.1,
+      "weight_rec": 10.0,
+      "weight_time": 20.0
+    },
+    "weight_decay": 0.0001
+  }
+}
+Runs:
+  run_164: LNT=768, token_1_error=0.0030775736, token_2_error=0.16242404, token_1_outliers=None, token_2_outliers=None
+  run_163: LNT=896, token_1_error=0.0021229533, token_2_error=0.041869342, token_1_outliers=0.0, token_2_outliers=993.0
+
+Parameter set 3
+Parameters:
+{
+  "custom_model": {
+    "input_dim": 64,
+    "latent_dim": 64,
+    "nhead": 4,
+    "num_layers": 4,
+    "target": "v1tovideo.neural_autoencoder.models:TAE_v1_01_1"
+  },
+  "data": {
+    "batch_size": 8,
+    "data_root_path": "/home/albertestop/data/processed_data/tba",
+    "dataset_id": "2025-07-04_04_ESPM154_vol_000_subset_1024_target_random_order",
+    "drop_last": false,
+    "num_workers": 16,
+    "pin_memory": true,
+    "shuffle_train": true,
+    "val_split": 0.1
+  },
+  "output": {},
+  "train": {
+    "device": "cuda:0",
+    "grad_clip_norm": 1.0,
+    "learning_rate": 0.0001,
+    "loss": {
+      "name": "combined",
+      "name_id": "cross_entropy",
+      "name_rec": "masked_mse",
+      "name_time": "masked_mae",
+      "poisson_eps": 1e-08,
+      "poisson_full": false,
+      "poisson_log_input": true,
+      "weight_id": 0.1,
+      "weight_rec": 10.0,
+      "weight_time": 20.0
+    },
+    "weight_decay": 0.0001
+  }
+}
+Runs:
+  run_168: LNT=768, token_1_error=0.011088004, token_2_error=0.069776922, token_1_outliers=43.0, token_2_outliers=17.0
+  run_169: LNT=896, token_1_error=0.0045568473, token_2_error=0.059864245, token_1_outliers=27.0, token_2_outliers=11.0
+
+Parameter set 4
+Parameters:
+{
+  "custom_model": {
+    "head_dropout": 0.0,
+    "input_dim": 64,
+    "latent_dim": 64,
+    "nhead": 4,
+    "num_layers": 4,
+    "t_input_dropout": 0.0,
+    "target": "v1tovideo.neural_autoencoder.models:TAE_v1_01_1",
+    "trans_dropout": 0.1
+  },
+  "data": {
+    "batch_size": 8,
+    "data_root_path": "/home/albertestop/data/processed_data/tba",
+    "dataset_id": "2025-07-04_04_ESPM154_vol_000_subset_1024_target_random_order",
+    "drop_last": false,
+    "num_workers": 16,
+    "pin_memory": true,
+    "shuffle_train": true,
+    "val_split": 0.1
+  },
+  "output": {},
+  "train": {
+    "device": "cuda:0",
+    "grad_clip_norm": 1.0,
+    "learning_rate": 0.0001,
+    "loss": {
+      "name": "combined",
+      "name_id": "cross_entropy",
+      "name_rec": "masked_mse",
+      "name_time": "masked_mae",
+      "poisson_eps": 1e-08,
+      "poisson_full": false,
+      "poisson_log_input": true,
+      "weight_id": 0.1,
+      "weight_rec": 10.0,
+      "weight_time": 10.0
+    },
+    "weight_decay": 0.0001
+  }
+}
+Runs:
+  run_192: LNT=128, token_1_error=0.0063695866, token_2_error=0.051390722, token_1_outliers=38.0, token_2_outliers=72.0
+  run_191: LNT=192, token_1_error=0.0056038965, token_2_error=0.051350441, token_1_outliers=43.0, token_2_outliers=143.0
+  run_190: LNT=256, token_1_error=0.0053863823, token_2_error=0.066839814, token_1_outliers=21.0, token_2_outliers=311.0
+  run_189: LNT=384, token_1_error=0.0056086918, token_2_error=0.035263412, token_1_outliers=43.0, token_2_outliers=14.0
+
+Parameter set 5
+Parameters:
+{
+  "custom_model": {
+    "head_dropout": 0.0,
+    "input_dim": 64,
+    "latent_dim": 64,
+    "nhead": 4,
+    "num_layers": 4,
+    "t_input_dropout": 0.0,
+    "target": "v1tovideo.neural_autoencoder.models:TAE_v1_01_1",
+    "trans_dropout": 0.1
+  },
+  "data": {
+    "batch_size": 8,
+    "data_root_path": "/gpfs/projects/uab108/uab020077/data/processed_data/tba",
+    "dataset_id": "2025-07-04_04_ESPM154_vol_000_subset_1024_target_random_order_time_token_train_trial_neuron_jitter",
+    "drop_last": false,
+    "num_workers": 16,
+    "pin_memory": true,
+    "shuffle_train": true,
+    "val_split": 0.1,
+    "val_trial_selection": "run_179"
+  },
+  "output": {},
+  "train": {
+    "device": "cuda:0",
+    "grad_clip_norm": 1.0,
+    "learning_rate": 0.0001,
+    "loss": {
+      "name": "combined",
+      "name_id": "cross_entropy",
+      "name_rec": "masked_mse",
+      "name_time": "masked_mae",
+      "poisson_eps": 1e-08,
+      "poisson_full": false,
+      "poisson_log_input": true,
+      "weight_id": 0.0001,
+      "weight_rec": 10.0,
+      "weight_time": 1.0
+    },
+    "weight_decay": 0.0001
+  }
+}
+Runs:
+  run_213: LNT=64, token_1_error=0.26226315, token_2_error=0.051875833, token_1_outliers=None, token_2_outliers=None
+  run_211: LNT=128, token_1_error=0.086060613, token_2_error=0.081535056, token_1_outliers=None, token_2_outliers=None
+  run_209: LNT=256, token_1_error=0.06927377, token_2_error=0.037301634, token_1_outliers=None, token_2_outliers=None
+  run_203: LNT=512, token_1_error=0.016053904, token_2_error=0.021488803, token_1_outliers=31.0, token_2_outliers=0.0
+  run_204: LNT=512, token_1_error=0.01069824, token_2_error=0.01477719, token_1_outliers=1.0, token_2_outliers=0.0
+
+Parameter set 6
+Parameters:
+{
+  "custom_model": {
+    "head_dropout": 0.0,
+    "input_dim": 64,
+    "latent_dim": 64,
+    "nhead": 4,
+    "num_layers": 4,
+    "t_input_dropout": 0.0,
+    "target": "v1tovideo.neural_autoencoder.models:TAE_v1_01_1",
+    "trans_dropout": 0.1
+  },
+  "data": {
+    "batch_size": 8,
+    "data_root_path": "/gpfs/projects/uab108/uab020077/data/processed_data/tba",
+    "dataset_id": "2025-07-04_04_ESPM154_vol_000_subset_1024_target_random_order",
+    "drop_last": false,
+    "num_workers": 16,
+    "pin_memory": true,
+    "shuffle_train": true,
+    "val_split": 0.1,
+    "val_trial_selection": "run_179"
+  },
+  "output": {},
+  "train": {
+    "device": "cuda:0",
+    "grad_clip_norm": 1.0,
+    "learning_rate": 0.0001,
+    "loss": {
+      "name": "combined",
+      "name_id": "cross_entropy",
+      "name_rec": "masked_mse",
+      "name_time": "masked_mse",
+      "poisson_eps": 1e-08,
+      "poisson_full": false,
+      "poisson_log_input": true,
+      "weight_id": 0.0001,
+      "weight_rec": 10.0,
+      "weight_time": 1.0
+    },
+    "weight_decay": 0.0001
+  }
+}
+Runs:
+  run_219: LNT=64, token_1_error=0.25531396, token_2_error=0.042612001, token_1_outliers=None, token_2_outliers=None
+  run_217: LNT=128, token_1_error=0.25704378, token_2_error=0.035247587, token_1_outliers=None, token_2_outliers=None
+  run_215: LNT=256, token_1_error=0.050609995, token_2_error=0.034655925, token_1_outliers=None, token_2_outliers=None
+  run_207: LNT=512, token_1_error=0.017310556, token_2_error=0.016947828, token_1_outliers=54.0, token_2_outliers=0.0
+  run_208: LNT=512, token_1_error=0.020482998, token_2_error=0.019572314, token_1_outliers=48.0, token_2_outliers=1.0
+
+Parameter set 7
+Parameters:
+{
+  "custom_model": {
+    "head_dropout": 0.0,
+    "input_dim": 64,
+    "latent_dim": 64,
+    "nhead": 4,
+    "num_layers": 4,
+    "t_input_dropout": 0.0,
+    "target": "v1tovideo.neural_autoencoder.models:TAE_v1_01_1",
+    "trans_dropout": 0.1
+  },
+  "data": {
+    "batch_size": 8,
+    "data_root_path": "/gpfs/projects/uab108/uab020077/data/processed_data/tba",
+    "dataset_id": "2025-07-04_04_ESPM154_vol_000_subset_1024_target_random_order_time_token_train_trial_neuron_jitter",
+    "drop_last": false,
+    "num_workers": 16,
+    "pin_memory": true,
+    "shuffle_train": true,
+    "val_split": 0.1,
+    "val_trial_selection": "run_179"
+  },
+  "output": {},
+  "train": {
+    "device": "cuda:0",
+    "grad_clip_norm": 1.0,
+    "learning_rate": 0.0001,
+    "loss": {
+      "name": "combined",
+      "name_id": "cross_entropy",
+      "name_rec": "masked_mse",
+      "name_time": "masked_mae",
+      "poisson_eps": 1e-08,
+      "poisson_full": false,
+      "poisson_log_input": true,
+      "weight_id": 0.0001,
+      "weight_rec": 10.0,
+      "weight_time": 0.0
+    },
+    "weight_decay": 0.0001
+  }
+}
+Runs:
+  run_214: LNT=64, token_1_error=0.50076264, token_2_error=0.032052606, token_1_outliers=None, token_2_outliers=None
+  run_212: LNT=128, token_1_error=0.63049138, token_2_error=0.033522338, token_1_outliers=None, token_2_outliers=None
+  run_210: LNT=256, token_1_error=0.4853656, token_2_error=0.029391456, token_1_outliers=None, token_2_outliers=None
+
+Parameter set 8
+Parameters:
+{
+  "custom_model": {
+    "head_dropout": 0.0,
+    "input_dim": 64,
+    "latent_dim": 64,
+    "nhead": 4,
+    "num_layers": 4,
+    "t_input_dropout": 0.0,
+    "target": "v1tovideo.neural_autoencoder.models:TAE_v1_01_1",
+    "trans_dropout": 0.1
+  },
+  "data": {
+    "batch_size": 8,
+    "data_root_path": "/gpfs/projects/uab108/uab020077/data/processed_data/tba",
+    "dataset_id": "2025-07-04_04_ESPM154_vol_000_subset_1024_target_random_order",
+    "drop_last": false,
+    "num_workers": 16,
+    "pin_memory": true,
+    "shuffle_train": true,
+    "val_split": 0.1,
+    "val_trial_selection": "run_179"
+  },
+  "output": {},
+  "train": {
+    "device": "cuda:0",
+    "grad_clip_norm": 1.0,
+    "learning_rate": 0.0001,
+    "loss": {
+      "name": "combined",
+      "name_id": "cross_entropy",
+      "name_rec": "masked_mse",
+      "name_time": "masked_mse",
+      "poisson_eps": 1e-08,
+      "poisson_full": false,
+      "poisson_log_input": true,
+      "weight_id": 0.0001,
+      "weight_rec": 10.0,
+      "weight_time": 0.0
+    },
+    "weight_decay": 0.0001
+  }
+}
+Runs:
+  run_220: LNT=64, token_1_error=0.37963524, token_2_error=0.046056595, token_1_outliers=None, token_2_outliers=80.0
+  run_218: LNT=128, token_1_error=0.8363356, token_2_error=0.034160055, token_1_outliers=None, token_2_outliers=None
+  run_216: LNT=256, token_1_error=0.40432045, token_2_error=0.021894874, token_1_outliers=None, token_2_outliers=None
+
+Parameter set 9
+Parameters:
+{
+  "custom_model": {
+    "head_dropout": 0.0,
+    "input_dim": 64,
+    "latent_dim": 64,
+    "nhead": 4,
+    "num_layers": 4,
+    "t_input_dropout": 0.0,
+    "target": "v1tovideo.neural_autoencoder.models:TAE_v1_01_1",
+    "trans_dropout": 0.1
+  },
+  "data": {
+    "batch_size": 8,
+    "data_root_path": "/gpfs/projects/uab108/uab020077/data/processed_data/tba",
+    "dataset_id": "2025-07-04_04_ESPM154_vol_000_subset_1024_target_random_order_time_token_train_trial_neuron_jitter",
+    "drop_last": false,
+    "num_workers": 16,
+    "pin_memory": true,
+    "shuffle_train": true,
+    "val_split": 0.1,
+    "val_trial_selection": "run_179"
+  },
+  "output": {},
+  "train": {
+    "device": "cuda:0",
+    "grad_clip_norm": 1.0,
+    "learning_rate": 0.0001,
+    "loss": {
+      "name": "combined",
+      "name_id": "cross_entropy",
+      "name_rec": "masked_mse",
+      "name_time": "masked_mae",
+      "poisson_eps": 1e-08,
+      "poisson_full": false,
+      "poisson_log_input": true,
+      "weight_id": 0.0001,
+      "weight_rec": 10.0,
+      "weight_time": 2.0
+    },
+    "weight_decay": 0.0001
+  }
+}
+Runs:
+  run_223: LNT=64, token_1_error=0.064564735, token_2_error=0.059219118, token_1_outliers=331.0, token_2_outliers=120.0
+  run_222: LNT=128, token_1_error=0.069011286, token_2_error=0.059529081, token_1_outliers=400.0, token_2_outliers=71.0
+  run_221: LNT=256, token_1_error=0.019643605, token_2_error=0.031909782, token_1_outliers=56.0, token_2_outliers=27.0
+
+Parameter set 10
+Parameters:
+{
+  "custom_model": {
+    "head_dropout": 0.0,
+    "input_dim": 64,
+    "latent_dim": 64,
+    "nhead": 4,
+    "num_layers": 4,
+    "t_input_dropout": 0.0,
+    "target": "v1tovideo.neural_autoencoder.models:TAE_v1_01_1",
+    "trans_dropout": 0.1
+  },
+  "data": {
+    "batch_size": 8,
+    "data_root_path": "/gpfs/projects/uab108/uab020077/data/processed_data/tba",
+    "dataset_id": "2025-07-04_04_ESPM154_vol_000_subset_1024_target_random_order",
+    "drop_last": false,
+    "num_workers": 16,
+    "pin_memory": true,
+    "shuffle_train": true,
+    "val_split": 0.1,
+    "val_trial_selection": "run_179"
+  },
+  "output": {},
+  "train": {
+    "device": "cuda:0",
+    "grad_clip_norm": 1.0,
+    "learning_rate": 0.0001,
+    "loss": {
+      "name": "combined",
+      "name_id": "cross_entropy",
+      "name_rec": "masked_mse",
+      "name_time": "masked_mse",
+      "poisson_eps": 1e-08,
+      "poisson_full": false,
+      "poisson_log_input": true,
+      "weight_id": 0.0001,
+      "weight_rec": 10.0,
+      "weight_time": 2.0
+    },
+    "weight_decay": 0.0001
+  }
+}
+Runs:
+  run_226: LNT=64, token_1_error=0.050428748, token_2_error=0.05376048, token_1_outliers=275.0, token_2_outliers=63.0
+  run_225: LNT=128, token_1_error=0.25552469, token_2_error=0.037721507, token_1_outliers=5496.0, token_2_outliers=1.0
+  run_224: LNT=256, token_1_error=0.02817167, token_2_error=0.02142009, token_1_outliers=162.0, token_2_outliers=0.0
