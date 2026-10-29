@@ -102,6 +102,7 @@ def main() -> None:
         train_loader=train_loader,
         val_loader=val_loader,
         config=config.train,
+        checkpoint_dir=output_dir,
     )
 
     eval_metrics = evaluate_autoencoder(model=model, dataloader=val_loader, device=config.train.device)
@@ -151,15 +152,17 @@ def main() -> None:
         device=config.train.device
     )
     save_validation_error_stats(model, val_loader, output_dir, config.train.device)
-    save_high_mae_trial_plots(
-        model=model,
-        val_dataset=val_loader.dataset,
-        train_dataset=train_loader.dataset,
-        dataset_dir=config.data.path,
-        output_dir=output_dir,
-        device=config.train.device,
-        weight_time=config.train.loss_weight_time,
-    )
+    # This analysis can be expensive on a full dataset. It remains available
+    # through tests/scripts_backfill_high_mae_trial_plots.py when needed.
+    # save_high_mae_trial_plots(
+    #     model=model,
+    #     val_dataset=val_loader.dataset,
+    #     train_dataset=train_loader.dataset,
+    #     dataset_dir=config.data.path,
+    #     output_dir=output_dir,
+    #     device=config.train.device,
+    #     weight_time=config.train.loss_weight_time,
+    # )
     LOGGER.info("Saved SC data")
 
     LOGGER.info("Run finished | output_dir=%s", output_dir)
