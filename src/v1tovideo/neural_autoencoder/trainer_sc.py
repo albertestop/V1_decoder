@@ -404,7 +404,7 @@ def save_high_mae_trial_plots(
     mae_threshold: float = 0.3,
     token_idxs: tuple[int, ...] = (1, 2),
     batch_size: int = 8,
-    factor: int = 9,
+    factor: int = 13,
     weight_time: float = 1.0,
 ) -> dict[str, Any]:
     """Save plots for validation-trial neurons whose token MAE is high.
@@ -490,13 +490,19 @@ def save_high_mae_trial_plots(
 
         for trial_id, trial_inputs, trial_targets in zip(val_trial_ids, val_inputs, val_targets):
             trial_predictions = predict_trial(trial_inputs)
+            mae_neurons = []
             for neuron_idx in range(train_targets.shape[2]):
                 mae = float(np.mean(np.abs(
                     trial_predictions[:, neuron_idx, token_idx] - trial_targets[:, neuron_idx, token_idx]
                 )))
                 if mae <= mae_threshold:
                     continue
+                plot_counts[f"token_{int(token_idx)}"] += 1
+                mae_neurons.append(neuron_idx)
 
+            if len(mae_neurons) > 4:
+                mae_neurons = np.random.choice(mae_neurons, size=4, replace=False).tolist()
+            for neuron_idx in mae_neurons:
                 train_lines = ax.plot(
                     row_positions, train_targets[:, :, neuron_idx, token_idx].T,
                     color='darkgrey', alpha=0.5, linewidth=0.7, label="Train target",
@@ -524,7 +530,6 @@ def save_high_mae_trial_plots(
                 prediction_line.remove()
                 for line in train_lines:
                     line.remove()
-                plot_counts[f"token_{int(token_idx)}"] += 1
         plt.close(fig)
 
     with (out_dir / "plot_counts.txt").open("w", encoding="utf-8") as fp:
