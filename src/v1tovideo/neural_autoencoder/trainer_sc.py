@@ -490,7 +490,7 @@ def save_high_mae_trial_plots(
 
         for trial_id, trial_inputs, trial_targets in zip(val_trial_ids, val_inputs, val_targets):
             trial_predictions = predict_trial(trial_inputs)
-            mae_neurons = []
+            mae_neurons, mae_neurons_mae = [], []
             for neuron_idx in range(train_targets.shape[2]):
                 mae = float(np.mean(np.abs(
                     trial_predictions[:, neuron_idx, token_idx] - trial_targets[:, neuron_idx, token_idx]
@@ -499,10 +499,13 @@ def save_high_mae_trial_plots(
                     continue
                 plot_counts[f"token_{int(token_idx)}"] += 1
                 mae_neurons.append(neuron_idx)
+                mae_neurons_mae.append(mae)
 
             if len(mae_neurons) > 4:
-                mae_neurons = np.random.choice(mae_neurons, size=4, replace=False).tolist()
-            for neuron_idx in mae_neurons:
+                idx = np.random.choice(len(mae_neurons), size=4, replace=False)
+                mae_neurons = [mae_neurons[i] for i in idx]
+                mae_neurons_mae = [mae_neurons_mae[i] for i in idx]
+            for neuron_idx, mae in zip(mae_neurons, mae_neurons_mae):
                 train_lines = ax.plot(
                     row_positions, train_targets[:, :, neuron_idx, token_idx].T,
                     color='darkgrey', alpha=0.5, linewidth=0.7, label="Train target",

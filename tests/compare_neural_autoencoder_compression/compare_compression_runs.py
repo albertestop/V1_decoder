@@ -2,7 +2,7 @@
 """Compare neural-autoencoder validation metrics across compression levels.
 
 Runs are grouped when their ``config.toml`` files are identical after removing
-``custom_model.latent_num_tokens``, ``train.epochs``, and ``output.dir``.
+``custom_model.latent_num_tokens``, ``train.epochs``, ``data.val_trial_selection``, ``train.device``, and ``output.dir``.
 The latter is a run-specific destination rather than a training parameter.
 Metrics are read from the same files used by
 ``tests/summarize_neural_autoencoder_run.py``.
@@ -50,6 +50,8 @@ def parameter_set(config: dict[str, Any]) -> dict[str, Any]:
     parameters = copy.deepcopy(config)
     parameters.get("custom_model", {}).pop("latent_num_tokens", None)
     parameters.get("train", {}).pop("epochs", None)
+    parameters.get("train", {}).pop("device", None)
+    parameters.get("data", {}).pop("val_trial_selection", None)
     parameters.get("output", {}).pop("dir", None)
     return parameters
 
@@ -174,7 +176,7 @@ def plot_metric(groups: list[list[dict[str, Any]]], metric: str, ylabel: str, ou
 
 def write_parameter_details(groups: list[list[dict[str, Any]]], path: Path) -> None:
     lines = [
-        "Parameter sets are identical except for custom_model.latent_num_tokens, train.epochs, and output.dir.",
+        "Parameter sets are identical except for custom_model.latent_num_tokens, train.epochs, data.val_trial_selection, train.device, and output.dir.",
         "Outliers are absent when high_mae_trial_plots/plot_counts.txt does not exist.",
         "",
     ]

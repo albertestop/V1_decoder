@@ -154,15 +154,15 @@ def main() -> None:
     save_validation_error_stats(model, val_loader, output_dir, config.train.device)
     # This analysis can be expensive on a full dataset. It remains available
     # through tests/scripts_backfill_high_mae_trial_plots.py when needed.
-    # save_high_mae_trial_plots(
-    #     model=model,
-    #     val_dataset=val_loader.dataset,
-    #     train_dataset=train_loader.dataset,
-    #     dataset_dir=config.data.path,
-    #     output_dir=output_dir,
-    #     device=config.train.device,
-    #     weight_time=config.train.loss_weight_time,
-    # )
+    save_high_mae_trial_plots(
+        model=model,
+        val_dataset=val_loader.dataset,
+        train_dataset=train_loader.dataset,
+        dataset_dir=config.data.path,
+        output_dir=output_dir,
+        device=config.train.device,
+        weight_time=config.train.loss_weight_time,
+    )
     LOGGER.info("Saved SC data")
 
     LOGGER.info("Run finished | output_dir=%s", output_dir)
