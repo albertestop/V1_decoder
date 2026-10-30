@@ -137,7 +137,7 @@ Parameters:
   }
 }
 Runs:
-  run_227: LNT=64, token_1_error=0.013794752, token_2_error=0.16504876, token_1_outliers=133.0, token_2_outliers=1524.0
+  run_227: LNT=64, token_1_error=0.013912656, token_2_error=0.12149481, token_1_outliers=129.0, token_2_outliers=636.0
   run_192: LNT=128, token_1_error=0.0063695866, token_2_error=0.051390722, token_1_outliers=38.0, token_2_outliers=72.0
   run_191: LNT=192, token_1_error=0.0056038965, token_2_error=0.051350441, token_1_outliers=43.0, token_2_outliers=143.0
   run_190: LNT=256, token_1_error=0.0053863823, token_2_error=0.066839814, token_1_outliers=21.0, token_2_outliers=311.0

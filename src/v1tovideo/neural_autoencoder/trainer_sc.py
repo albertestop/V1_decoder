@@ -401,7 +401,7 @@ def save_high_mae_trial_plots(
     dataset_dir: Path,
     output_dir: Path,
     device: str = "cuda",
-    mae_threshold: float = 0.3,
+    mae_thresholds: tuple[float, ...] = (0.3, 0.5),
     token_idxs: tuple[int, ...] = (1, 2),
     batch_size: int = 8,
     factor: int = 13,
@@ -478,7 +478,7 @@ def save_high_mae_trial_plots(
         for token_idx in token_idxs
     }
     row_positions = np.arange(train_targets.shape[1])
-    for token_idx in token_idxs:
+    for token_idx, mae_threshold in zip(token_idxs, mae_thresholds):
         if not 0 <= token_idx < train_targets.shape[-1]:
             raise ValueError(f"Token index {token_idx} is outside the dataset token dimension")
         if token_idx == 1 and weight_time == 0:
