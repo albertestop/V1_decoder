@@ -10,6 +10,7 @@ explicit in the script.
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import logging
 import shutil
@@ -148,6 +149,31 @@ def clear_generated_outputs(run_dir: Path) -> None:
         shutil.rmtree(high_mae_dir)
 
 
+def best_recorded_val_loss(history: list[dict[str, Any]], run_dir: Path) -> float:
+    """Return the old model's best recorded validation loss."""
+    losses = [
+        float(row["val_loss"])
+        for row in history
+        if isinstance(row, dict)
+        and "val_loss" in row
+        and np.isfinite(float(row["val_loss"]))
+    ]
+    if losses:
+        return min(losses)
+
+    summary_path = run_dir / "summary.json"
+    if summary_path.is_file():
+        summary = load_json(summary_path)
+        if isinstance(summary, dict) and "val_loss" in summary:
+            loss = float(summary["val_loss"])
+            if np.isfinite(loss):
+                return loss
+    raise ValueError(
+        "Cannot determine the loaded model's validation loss from history.json or summary.json; "
+        "refusing to risk replacing the existing best checkpoint."
+    )
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
     parser = argparse.ArgumentParser(description="Continue a saved neural-autoencoder run in place.")
@@ -188,10 +214,19 @@ def main() -> None:
             raise ValueError(f"Expected a list in {history_path}")
         old_history = loaded_history
     previous_epoch = max((float(row.get("epoch", 0)) for row in old_history), default=0.0)
+    old_best_val_loss = best_recorded_val_loss(old_history, run_dir)
+    original_state_dict = copy.deepcopy(model.state_dict())
+    total_epoch_budget = max(int(config.train.epochs), int(previous_epoch)) + args.epochs
 
     # train_autoencoder writes its best checkpoint during training.  Use a
     # temporary directory so an interrupted continuation cannot damage run_X.
     config.train.epochs = args.epochs
+    config.train.early_stopping_patience_epochs = total_epoch_budget
+    LOGGER.info(
+        "Continuation early-stopping patience=%d epochs (ceil(%d / 10))",
+        (total_epoch_budget + 9) // 10,
+        total_epoch_budget,
+    )
     with tempfile.TemporaryDirectory(prefix="neural_ae_continue_") as checkpoint_dir:
         new_history = train_autoencoder(
             model=model,
@@ -199,6 +234,26 @@ def main() -> None:
             val_loader=val_loader,
             config=config.train,
             checkpoint_dir=Path(checkpoint_dir),
+        )
+
+    new_losses = [
+        float(row["val_loss"])
+        for row in new_history
+        if "val_loss" in row and np.isfinite(float(row["val_loss"]))
+    ]
+    new_best_val_loss = min(new_losses, default=float("inf"))
+    if new_best_val_loss >= old_best_val_loss:
+        model.load_state_dict(original_state_dict)
+        LOGGER.info(
+            "Retained loaded model | old best val_loss=%.6f <= continuation best=%.6f",
+            old_best_val_loss,
+            new_best_val_loss,
+        )
+    else:
+        LOGGER.info(
+            "Continuation improved best val_loss | %.6f -> %.6f",
+            old_best_val_loss,
+            new_best_val_loss,
         )
 
     for row in new_history:

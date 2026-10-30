@@ -39,6 +39,9 @@ class TrainConfig:
     combined_loss_name_id: str = "cross_entropy"
     combined_loss_name_time: str = "masked_mse"
     combined_loss_name_rec: str = "masked_mse"
+    # When continuing a run, patience can be based on the total epoch budget
+    # while ``epochs`` remains the number of epochs to run in this invocation.
+    early_stopping_patience_epochs: int | None = None
 
 
 def _resolve_device(device: str) -> torch.device:
@@ -420,10 +423,15 @@ def train_autoencoder(
     best_model_callback = (
         BestModelStateCallback(checkpoint_dir / "model.pt") if checkpoint_dir is not None else None
     )
+    patience_epochs = (
+        int(config.early_stopping_patience_epochs)
+        if config.early_stopping_patience_epochs is not None
+        else int(config.epochs)
+    )
     early_stopping_callback = EarlyStopping(
         monitor="val_loss",
         mode="min",
-        patience=math.ceil(float(config.epochs) / 10.0),
+        patience=math.ceil(float(patience_epochs) / 10.0),
     )
     train_start = time.perf_counter()
     if checkpoint_dir is not None:
