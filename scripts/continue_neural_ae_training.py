@@ -46,8 +46,8 @@ from v1tovideo.neural_autoencoder.trainer_sc import (
 )
 
 # Set these two values before running the script.
-RUN_DIR = REPO_ROOT / "outputs" / "neural_autoencoder" / "run_227"
-ADDITIONAL_EPOCHS = 350
+RUN_DIR = REPO_ROOT / "outputs" / "neural_autoencoder" / "run_190"
+ADDITIONAL_EPOCHS = 100
 
 LOGGER = logging.getLogger(__name__)
 

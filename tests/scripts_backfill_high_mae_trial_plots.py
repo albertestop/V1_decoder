@@ -93,7 +93,6 @@ def backfill_run(
         dataset_dir=config.data.path,
         output_dir=run_dir,
         device=device or config.train.device,
-        mae_threshold=mae_threshold,
         weight_time=config.train.loss_weight_time,
     )
     LOGGER.info(
