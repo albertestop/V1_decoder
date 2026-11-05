@@ -508,7 +508,7 @@ def save_high_mae_trial_plots(
             for neuron_idx, mae in zip(mae_neurons, mae_neurons_mae):
                 train_lines = ax.plot(
                     row_positions, train_targets[:, :, neuron_idx, token_idx].T,
-                    color='darkgrey', alpha=0.5, linewidth=0.7, label="Train target",
+                    color='darkgrey', alpha=0.5, linewidth=0.7, label="_nolegend_",
                 )
                 target_line, = ax.plot(
                     row_positions, trial_targets[:, neuron_idx, token_idx],
@@ -523,7 +523,7 @@ def save_high_mae_trial_plots(
                 )
                 ax.set_xlabel("Row within trial")
                 ax.set_ylabel("Token value")
-                legend = ax.legend()
+                legend = ax.legend(handles=[target_line, prediction_line])
                 fig.savefig(
                     out_dir / f"token_{token_idx}" / f"trial_{trial_id}_neuron_{neuron_idx}_mae_{mae:.3f}.png",
                     bbox_inches="tight",

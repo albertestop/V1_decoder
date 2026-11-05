@@ -10,7 +10,10 @@ Metrics are read from the same files used by
 Example:
     python tests/compare_neural_autoencoder_compression/compare_compression_runs.py
 
-The default output directory is ``tests/compare_neural_autoencoder_compression/results``.
+Set ``INPUT_NEURONS`` and ``IGNORE_SINGLE_RUN_PARAMETER_SETS`` below to choose
+the dataset size and whether parameter sets represented by just one run are
+excluded. Only runs whose ``summary.json`` reports the configured number of
+input neurons (the second dimension of ``dataset_shape``) are compared.
 """
 
 from __future__ import annotations
@@ -33,6 +36,10 @@ except ModuleNotFoundError as error:  # pragma: no cover - only for Python < 3.1
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_RUNS_DIRECTORY = PROJECT_ROOT / "outputs" / "neural_autoencoder"
 DEFAULT_OUTPUT_DIRECTORY = Path(__file__).resolve().parent / "results"
+
+# Comparison settings.
+INPUT_NEURONS = 5443
+IGNORE_SINGLE_RUN_PARAMETER_SETS = False
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -85,15 +92,26 @@ def run_sort_key(run_directory: Path) -> tuple[int, int | str]:
     return (0, identifier) if isinstance(identifier, int) else (1, identifier)
 
 
-def inspect_run(run_directory: Path) -> dict[str, Any] | None:
+def inspect_run(run_directory: Path, input_neurons: int) -> dict[str, Any] | None:
     config_path = run_directory / "config.toml"
     stats_path = run_directory / "validation_error_stats.json"
-    if not config_path.is_file() or not stats_path.is_file():
+    summary_path = run_directory / "summary.json"
+    if not config_path.is_file() or not stats_path.is_file() or not summary_path.is_file():
         return None
 
     config = load_config(config_path)
     latent_num_tokens = config.get("custom_model", {}).get("latent_num_tokens")
     if latent_num_tokens is None:
+        return None
+
+    dataset_shape = load_json(summary_path).get("dataset_shape")
+    if not isinstance(dataset_shape, list) or len(dataset_shape) < 2:
+        return None
+    try:
+        run_input_neurons = int(dataset_shape[1])
+    except (TypeError, ValueError):
+        return None
+    if run_input_neurons != input_neurons:
         return None
 
     validation_stats = load_json(stats_path)
@@ -107,6 +125,7 @@ def inspect_run(run_directory: Path) -> dict[str, Any] | None:
     return {
         "run": run_number(run_directory),
         "directory": str(run_directory),
+        "input_neurons": run_input_neurons,
         "latent_num_tokens": int(latent_num_tokens),
         "token_1_error": token_1_error,
         "token_2_error": token_2_error,
@@ -116,20 +135,25 @@ def inspect_run(run_directory: Path) -> dict[str, Any] | None:
     }
 
 
-def collect_groups(runs_directory: Path) -> list[list[dict[str, Any]]]:
+def collect_groups(
+    runs_directory: Path,
+    input_neurons: int,
+    ignore_single_run_parameter_sets: bool,
+) -> list[list[dict[str, Any]]]:
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for run_directory in sorted(runs_directory.glob("run_*"), key=run_sort_key):
         if not run_directory.is_dir():
             continue
-        record = inspect_run(run_directory)
+        record = inspect_run(run_directory, input_neurons)
         if record is not None:
             grouped[canonical_config(record["parameters"])].append(record)
 
-    # A useful comparison must contain more than one compression level.
+    # Optionally retain individual runs, e.g. to include their metrics in the
+    # report even though they do not provide a compression-level comparison.
     groups = [
         sorted(group, key=lambda record: (record["latent_num_tokens"], record["run"]))
         for group in grouped.values()
-        if len({record["latent_num_tokens"] for record in group}) > 1
+        if not ignore_single_run_parameter_sets or len(group) > 1
     ]
     return sorted(groups, key=lambda group: (min(record["run"] for record in group), len(group)))
 
@@ -198,16 +222,24 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIRECTORY)
     arguments = parser.parse_args()
 
-    groups = collect_groups(arguments.runs_dir)
-    arguments.output_dir.mkdir(parents=True, exist_ok=True)
-    write_parameter_details(groups, arguments.output_dir / "parameter_sets.txt")
-    plot_metric(groups, "token_1_error", "Token 1 error", arguments.output_dir / "token_1_error_vs_lnt.png")
-    plot_metric(groups, "token_2_error", "Token 2 error", arguments.output_dir / "token_2_error_vs_lnt.png")
-    plot_metric(groups, "token_1_outliers", "Token 1 outliers", arguments.output_dir / "token_1_outliers_vs_lnt.png")
-    plot_metric(groups, "token_2_outliers", "Token 2 outliers", arguments.output_dir / "token_2_outliers_vs_lnt.png")
+    if INPUT_NEURONS <= 0:
+        raise ValueError("INPUT_NEURONS must be positive")
 
-    print(f"Found {len(groups)} parameter sets with multiple compression levels.")
-    print(f"Wrote plots and parameter details to: {arguments.output_dir}")
+    groups = collect_groups(
+        arguments.runs_dir,
+        INPUT_NEURONS,
+        IGNORE_SINGLE_RUN_PARAMETER_SETS,
+    )
+    output_directory = arguments.output_dir / f"input_neurons_{INPUT_NEURONS}"
+    output_directory.mkdir(parents=True, exist_ok=True)
+    write_parameter_details(groups, output_directory / "parameter_sets.txt")
+    plot_metric(groups, "token_1_error", "Token 1 error", output_directory / "token_1_error_vs_lnt.png")
+    plot_metric(groups, "token_2_error", "Token 2 error", output_directory / "token_2_error_vs_lnt.png")
+    plot_metric(groups, "token_1_outliers", "Token 1 outliers", output_directory / "token_1_outliers_vs_lnt.png")
+    plot_metric(groups, "token_2_outliers", "Token 2 outliers", output_directory / "token_2_outliers_vs_lnt.png")
+
+    print(f"Found {len(groups)} parameter sets.")
+    print(f"Wrote plots and parameter details to: {output_directory}")
 
 
 if __name__ == "__main__":
