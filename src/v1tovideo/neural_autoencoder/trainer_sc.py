@@ -401,7 +401,7 @@ def save_high_mae_trial_plots(
     dataset_dir: Path,
     output_dir: Path,
     device: str = "cuda",
-    mae_thresholds: tuple[float, ...] = (0.3, 0.5),
+    mae_thresholds: tuple[float, ...] = (0.3, 0.45),
     token_idxs: tuple[int, ...] = (1, 2),
     batch_size: int = 8,
     factor: int = 13,
