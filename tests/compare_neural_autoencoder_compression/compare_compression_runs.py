@@ -38,8 +38,8 @@ DEFAULT_RUNS_DIRECTORY = PROJECT_ROOT / "outputs" / "neural_autoencoder"
 DEFAULT_OUTPUT_DIRECTORY = Path(__file__).resolve().parent / "results"
 
 # Comparison settings.
-INPUT_NEURONS = 5443
-IGNORE_SINGLE_RUN_PARAMETER_SETS = False
+INPUT_NEURONS = 1024
+IGNORE_SINGLE_RUN_PARAMETER_SETS = True
 
 
 def load_json(path: Path) -> dict[str, Any]:

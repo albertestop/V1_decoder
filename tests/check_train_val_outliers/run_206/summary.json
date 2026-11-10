@@ -1,0 +1,31 @@
+{
+  "run": "run_206",
+  "run_dir": "/home/albertestop/visual_cortex_study/transformer_arch/outputs/neural_autoencoder/run_206",
+  "dataset_dir": "/home/albertestop/data/processed_data/tba/2025-07-04_04_ESPM154_vol_000_subset_1024_target_random_order",
+  "device": "cuda:1",
+  "definition": {
+    "comparison": "mae > threshold",
+    "thresholds": {
+      "1": 0.3,
+      "2": 0.485
+    }
+  },
+  "trial_counts": {
+    "validation": 13,
+    "train": 115
+  },
+  "outlier_counts": {
+    "train": {
+      "token_1": 10,
+      "token_2": 0,
+      "total": 10
+    },
+    "validation": {
+      "token_1": 78,
+      "token_2": 0,
+      "total": 78
+    }
+  },
+  "skipped_tokens": [],
+  "record_count": 88
+}

@@ -65,6 +65,7 @@ provides newer, more specific instructions.
 
 - Configuration files: `scripts/configs/`.
 - Local training entry point: `scripts/run_neural_ae_experiment.py`.
+- Training configuration: `scripts/configs/neural_ae_experiment.toml`.
 - Cluster-ready counterpart: `scripts/BSC/run_neural_ae_experiment.py`.
   These scripts must remain functionally aligned: when changing one, implement
   the analogous change in the other unless there is a documented cluster-only
