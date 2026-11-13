@@ -3,7 +3,7 @@
 
 Example:
     /home/albertestop/miniconda3/envs/sci_albert/bin/python \
-        tests/check_train_val_outliers/analyze_run_outliers.py --run run_193 --device cuda:0
+        tests/check_train_val_outliers/analyze_run_outliers.py --run run_193 --device cuda:1
 
 The default output directory is ``tests/<run name>/``.  Each row in
 ``outliers.csv`` is one outlying (split, trial, neuron, token) combination;
@@ -217,7 +217,7 @@ def main() -> None:
                 counts[(trial["split"], token)] += 1
 
     records.sort(key=lambda item: (item["split"], item["token"], item["trial_index"], item["neuron_index"]))
-    output_dir = (args.output_dir or REPO_ROOT / "tests" / run_dir.name).resolve()
+    output_dir = (args.output_dir or REPO_ROOT / "tests" / "check_train_val_outliers" / run_dir.name).resolve()
     summary = {
         "run": run_dir.name,
         "run_dir": str(run_dir),
