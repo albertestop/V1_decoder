@@ -61,7 +61,11 @@ class TAE_v1_01_1(nn.Module):
             batch_first=True,
             dropout=trans_dropout,
         )
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.encoder = nn.TransformerEncoder(
+            encoder_layer,
+            num_layers=num_layers,
+            enable_nested_tensor=False,
+        )
 
         self.to_latent = nn.Sequential(
             nn.LayerNorm(input_dim),
@@ -81,7 +85,11 @@ class TAE_v1_01_1(nn.Module):
             batch_first=True,
             dropout=trans_dropout,
         )
-        self.readd_transform = nn.TransformerEncoder(readdition_layer, num_layers=num_layers)
+        self.readd_transform = nn.TransformerEncoder(
+            readdition_layer,
+            num_layers=num_layers,
+            enable_nested_tensor=False,
+        )
 
         decoder_layer = nn.TransformerEncoderLayer(
             d_model=input_dim,
@@ -89,7 +97,11 @@ class TAE_v1_01_1(nn.Module):
             batch_first=True,
             dropout=trans_dropout,
         )
-        self.decoder = nn.TransformerEncoder(decoder_layer, num_layers=num_layers)
+        self.decoder = nn.TransformerEncoder(
+            decoder_layer,
+            num_layers=num_layers,
+            enable_nested_tensor=False,
+        )
 
         self.head_dropout = nn.Dropout(head_dropout)
 
