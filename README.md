@@ -85,6 +85,14 @@ To download finished BSC runs:
 python scripts/BSC/bsc_neural_ae_down_results.py
 ```
 
+For long-running batches, start the watchdog in a local tmux session. It checks workspaces `transformer_arch_0` through `transformer_arch_34` every five minutes, downloads runs after `summary.json` is written, and submits interrupted runs for their original configured number of additional epochs:
+
+```bash
+python scripts/BSC/watch_neural_ae_jobs.py
+```
+
+Use `--dry-run --once` before a first live run, and adjust `--interval`, `--first-workspace`, or `--last-workspace` when needed. The watchdog stores its download/submission state in `outputs/neural_autoencoder/bsc_watchdog_state.json`.
+
 To delete detected remote BSC result directories without downloading them:
 
 ```bash

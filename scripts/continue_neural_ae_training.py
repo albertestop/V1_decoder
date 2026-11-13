@@ -15,7 +15,6 @@ import json
 import logging
 import shutil
 import sys
-import tempfile
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -214,12 +213,23 @@ def main() -> None:
             raise ValueError(f"Expected a list in {history_path}")
         old_history = loaded_history
     previous_epoch = max((float(row.get("epoch", 0)) for row in old_history), default=0.0)
-    old_best_val_loss = best_recorded_val_loss(old_history, run_dir)
+    # A Slurm time-wall interruption leaves model.pt behind but not the
+    # end-of-run history/summary files.  Evaluate that saved best checkpoint
+    # in this case so continuation never replaces it with a worse model.
+    try:
+        old_best_val_loss = best_recorded_val_loss(old_history, run_dir)
+    except ValueError:
+        saved_metrics = evaluate_autoencoder(model=model, dataloader=val_loader, device=config.train.device)
+        old_best_val_loss = float(saved_metrics["loss"])
+        LOGGER.info(
+            "No completed history found; evaluated saved checkpoint | val_loss=%.6f",
+            old_best_val_loss,
+        )
     original_state_dict = copy.deepcopy(model.state_dict())
     total_epoch_budget = max(int(config.train.epochs), int(previous_epoch)) + args.epochs
 
-    # train_autoencoder writes its best checkpoint during training.  Use a
-    # temporary directory so an interrupted continuation cannot damage run_X.
+    # Keep the best checkpoint in run_dir during continuation.  If Slurm stops
+    # again, the watchdog can resume from that newer checkpoint.
     config.train.epochs = args.epochs
     config.train.early_stopping_patience_epochs = total_epoch_budget
     LOGGER.info(
@@ -227,14 +237,14 @@ def main() -> None:
         (total_epoch_budget + 9) // 10,
         total_epoch_budget,
     )
-    with tempfile.TemporaryDirectory(prefix="neural_ae_continue_") as checkpoint_dir:
-        new_history = train_autoencoder(
-            model=model,
-            train_loader=train_loader,
-            val_loader=val_loader,
-            config=config.train,
-            checkpoint_dir=Path(checkpoint_dir),
-        )
+    new_history = train_autoencoder(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        config=config.train,
+        checkpoint_dir=run_dir,
+        initial_best_val_loss=old_best_val_loss,
+    )
 
     new_losses = [
         float(row["val_loss"])

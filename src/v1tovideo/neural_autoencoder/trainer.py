@@ -392,9 +392,9 @@ class TrainHistoryCallback(pl.Callback):  # type: ignore[misc]
 class BestModelStateCallback(pl.Callback):  # type: ignore[misc]
     """Save the best validation model in the same format as ``save_checkpoint``."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, initial_best_val_loss: float = float("inf")) -> None:
         self.path = path
-        self.best_val_loss = float("inf")
+        self.best_val_loss = initial_best_val_loss
 
     def on_validation_epoch_end(self, trainer: Any, pl_module: Any) -> None:
         val_loss = trainer.callback_metrics.get("val_loss")
@@ -416,12 +416,13 @@ def train_autoencoder(
     config: TrainConfig,
     logger: Any | bool = False,
     checkpoint_dir: Path | None = None,
+    initial_best_val_loss: float = float("inf"),
 ) -> list[dict[str, float]]:
     """Train neural autoencoder with PyTorch Lightning and return epoch history."""
     lightning_model = AutoencoderLightningModule(model=model, config=config)
     history_callback = TrainHistoryCallback(train_loader)
     best_model_callback = (
-        BestModelStateCallback(checkpoint_dir / "model.pt") if checkpoint_dir is not None else None
+        BestModelStateCallback(checkpoint_dir / "model.pt", initial_best_val_loss) if checkpoint_dir is not None else None
     )
     patience_epochs = (
         int(config.early_stopping_patience_epochs)
@@ -493,10 +494,11 @@ def evaluate_autoencoder(
     )
     metrics = trainer.validate(lightning_model, dataloaders=dataloader, verbose=False)
     if not metrics:
-        return {"mse": float("nan"), "mae": float("nan")}
+        return {"mse": float("nan"), "mae": float("nan"), "loss": float("nan")}
     return {
         "mse": float(metrics[0].get("val_mse", float("nan"))),
         "mae": float(metrics[0].get("val_mae", float("nan"))),
+        "loss": float(metrics[0].get("val_loss", float("nan"))),
     }
 
 
