@@ -156,7 +156,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--conf", type=Path, default=DEFAULT_CONF)
     parser.add_argument("--first-workspace", type=int, default=0)
-    parser.add_argument("--last-workspace", type=int, default=34)
+    parser.add_argument("--last-workspace", type=int, default=59)
     parser.add_argument("--interval", type=int, default=300)
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--dry-run", action="store_true")

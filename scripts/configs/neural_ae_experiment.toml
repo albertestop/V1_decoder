@@ -35,8 +35,8 @@ device = "cuda:1"
 # Supported: "masked_mse", "masked_mae", "poisson_nll", "combined"
 name = "combined"
 # Combined options (used only when name = "combined")
-weight_id = 0.01
-weight_time = 5.0
+weight_id = 0.1
+weight_time = 10.0
 weight_rec = 10.0
 # id supports: "cross_entropy"
 name_id = "cross_entropy"

@@ -49,7 +49,7 @@ def main() -> None:
     ssh_transfer = conf["SSH_TRANSFER"]
 
     found = 0
-    for i in range(50):
+    for i in range(60):
         remote_root = Path(
             "/gpfs/projects/uab108/uab020077/transformer_arch/"
             f"transformer_arch_{i}/transformer_arch"
