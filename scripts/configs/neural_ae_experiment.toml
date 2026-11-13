@@ -13,11 +13,11 @@ drop_last = false
 
 [custom_model]
 target = "v1tovideo.neural_autoencoder.models:TAE_v1_01_1"
-input_dim = 64
-latent_dim = 64
-latent_num_tokens = 340
-num_layers = 4
-nhead = 4
+input_dim = 32
+latent_dim = 32
+latent_num_tokens = 681
+num_layers = 8
+nhead = 8
 t_input_dropout = 0.0
 trans_dropout = 0.10
 head_dropout = 0.0
