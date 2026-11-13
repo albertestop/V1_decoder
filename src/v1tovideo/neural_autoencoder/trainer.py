@@ -29,6 +29,10 @@ class TrainConfig:
     weight_decay: float = 1e-4
     grad_clip_norm: float | None = 1.0
     device: str = "cuda:1"
+    # Compile the autoencoder forward pass with TorchInductor. The neural
+    # datasets use a fixed padded token length, so dynamic shapes are disabled
+    # for the most efficient compiled graph.
+    compile_model: bool = False
     loss_name: str = "masked_mse"
     poisson_log_input: bool = True
     poisson_full: bool = False
@@ -419,6 +423,13 @@ def train_autoencoder(
     initial_best_val_loss: float = float("inf"),
 ) -> list[dict[str, float]]:
     """Train neural autoencoder with PyTorch Lightning and return epoch history."""
+    if config.compile_model:
+        if not hasattr(torch, "compile"):
+            raise RuntimeError("train.compile_model requires PyTorch 2.0 or later.")
+        LOGGER.info("Compiling model with torch.compile(dynamic=False)")
+        # Compile only the inner model. This keeps Lightning's training and
+        # checkpoint machinery unchanged, while optimizing the forward pass.
+        model = torch.compile(model, dynamic=False)
     lightning_model = AutoencoderLightningModule(model=model, config=config)
     history_callback = TrainHistoryCallback(train_loader)
     best_model_callback = (

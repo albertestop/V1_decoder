@@ -30,6 +30,9 @@ weight_decay = 1e-4
 grad_clip_norm = 1.0
 #default device = "cuda:1"
 device = "cuda:1"
+# Use TorchInductor for a fixed-shape compiled forward pass. Enable only on
+# PyTorch >= 2 after confirming the speedup with a short matched BSC run.
+compile_model = true
 
 [train.loss]
 # Supported: "masked_mse", "masked_mae", "poisson_nll", "combined"

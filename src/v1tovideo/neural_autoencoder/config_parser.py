@@ -76,6 +76,7 @@ def parse_neural_ae_experiment_config(config_path: Path) -> ExperimentConfig:
         weight_decay=float(train_cfg.get("weight_decay", 1e-4)),
         grad_clip_norm=float(train_cfg.get("grad_clip_norm", 1.0)),
         device=str(train_cfg.get("device", "cuda")),
+        compile_model=bool(train_cfg.get("compile_model", False)),
         loss_name=str(loss_name),
         poisson_log_input=bool(loss_cfg.get("poisson_log_input", train_cfg.get("poisson_log_input", True))),
         poisson_full=bool(loss_cfg.get("poisson_full", train_cfg.get("poisson_full", False))),
