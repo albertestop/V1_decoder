@@ -66,13 +66,19 @@ provides newer, more specific instructions.
 - Configuration files: `scripts/configs/`.
 - Local training entry point: `scripts/run_neural_ae_experiment.py`.
 - Training configuration: `scripts/configs/neural_ae_experiment.toml`.
+- For BSC submissions, define the experiment/run settings in
+  `scripts/configs/neural_ae_experiment.toml`; `scripts/BSC/bsc_neural_ae.py`
+  transfers a cluster-adjusted copy.
 - Cluster-ready counterpart: `scripts/BSC/run_neural_ae_experiment.py`.
   These scripts must remain functionally aligned: when changing one, implement
   the analogous change in the other unless there is a documented cluster-only
   reason not to.
 - BSC cluster configuration: `scripts/BSC/bsc_neural_ae.conf`.
-- BSC training launcher: `scripts/BSC/train_ae.py`.
-- BSC results retrieval: `scripts/BSC/bsc_neural_ae_down_results.py`.
+- In addition to running experiments locally, neural-autoencoder runs can be
+  submitted to the BSC cluster with `scripts/BSC/bsc_neural_ae.py`, using the
+  BSC configuration `scripts/BSC/bsc_neural_ae.conf`.
+- Download completed BSC run results with
+  `scripts/BSC/bsc_neural_ae_down_results.py`.
 
 ## Neural-autoencoder outputs
 

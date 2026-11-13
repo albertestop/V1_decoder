@@ -77,6 +77,9 @@ def main() -> None:
 
         print(f"Downloading transformer_arch_{i}/default_run -> {local_run_dir}")
         run_cmd(["scp", "-r", f"{ssh_transfer}:{remote_run_dir}/.", str(local_run_dir)])
+        (local_run_dir / "download_source.txt").write_text(
+            f"{remote_root}\n", encoding="utf-8"
+        )
         if DELETE_REMOTE: 
             run_cmd(["ssh", ssh_transfer, f"rm -rf '{remote_run_dir}'"])
             print(f"Downloaded and removed remote: transformer_arch_{i}/default_run")
