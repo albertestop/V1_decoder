@@ -37,11 +37,8 @@ def load_conf(path: Path) -> dict[str, str]:
     return values
 
 
-def command(cmd: list[str], *, capture: bool = False) -> subprocess.CompletedProcess[str]:
-    print("+", " ".join(shlex.quote(part) for part in cmd))
+def command(cmd: list[str], *, capture: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, text=True, check=True, capture_output=capture)
-
-
 def ssh(target: str, remote: str, *, capture: bool = False) -> subprocess.CompletedProcess[str]:
     return command(["ssh", target, remote], capture=capture)
 
@@ -73,9 +70,10 @@ def original_epochs(ssh_transfer: str, run_dir: Path) -> int:
     if result <= 0:
         raise ValueError(f"Invalid epochs in {run_dir}")
     return result
-def sync_and_submit(ssh_login: str, ssh_transfer: str, workspace: Path, run_dir: Path, epochs: int, dry_run: bool) -> str | None:
+def sync_and_submit(
+    ssh_login: str, ssh_transfer: str, workspace: Path, run_dir: Path, epochs: int, dry_run: bool
+) -> str | None:
     if dry_run:
-        print(f"DRY RUN: would resume {run_dir} for {epochs} epochs")
         return None
     for local, remote in (
         (REPO_ROOT / "scripts/continue_neural_ae_training.py", workspace / "scripts/continue_neural_ae_training.py"),
@@ -90,11 +88,7 @@ def sync_and_submit(ssh_login: str, ssh_transfer: str, workspace: Path, run_dir:
         f"sbatch --parsable --chdir={shlex.quote(str(workspace))} "
         f"--export={shlex.quote(exports)} {shlex.quote(str(sbatch))}"
     )
-    job_id = ssh(ssh_login, remote, capture=True).stdout.strip().split(";", 1)[0]
-    print(f"Submitted continuation: {workspace.name}, job {job_id}, epochs {epochs}")
-    return job_id
-
-
+    return ssh(ssh_login, remote, capture=True).stdout.strip().split(";", 1)[0]
 def reserve_local_run() -> Path:
     base = REPO_ROOT / "outputs/neural_autoencoder"
     base.mkdir(parents=True, exist_ok=True)
@@ -108,14 +102,10 @@ def download(ssh_transfer: str, workspace: Path, run_dir: Path, dry_run: bool) -
     output = reserve_local_run()
     if dry_run:
         output.rmdir()
-        print(f"DRY RUN: would download {run_dir} -> {output}")
         return None
     command(["scp", "-r", f"{ssh_transfer}:{run_dir}/.", str(output)])
     (output / "download_source.txt").write_text(f"{workspace}\n", encoding="utf-8")
-    print(f"Downloaded {workspace.name}/{RUN_NAME} -> {output}")
     return str(output)
-
-
 def read_state(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {"workspaces": {}}
 
@@ -143,15 +133,21 @@ def check(args: argparse.Namespace, conf: dict[str, str], state: dict[str, Any])
             if seen.get(key, {}).get("downloaded"):
                 continue
             path = download(transfer, workspace, run_dir, args.dry_run)
-            if not args.dry_run:
+            if args.dry_run:
+                print(f"[{index:02d}] would download")
+            else:
                 seen[key] = {"downloaded": path, "at": datetime.now(timezone.utc).isoformat()}
                 write_state(args.state_file, state)
+                print(f"[{index:02d}] downloaded -> {path}")
         elif {"config.toml", "model.pt", "val_indices.json"} <= files:
             epochs = original_epochs(transfer, run_dir)
             job_id = sync_and_submit(login, transfer, workspace, run_dir, epochs, args.dry_run)
-            if not args.dry_run:
+            if args.dry_run:
+                print(f"[{index:02d}] would resume ({epochs} epochs)")
+            else:
                 seen[key] = {"last_job": job_id, "epochs": epochs, "at": datetime.now(timezone.utc).isoformat()}
                 write_state(args.state_file, state)
+                print(f"[{index:02d}] resumed (job {job_id}, {epochs} epochs)")
         elif files:
             print(f"[{index:02d}] inactive but not resumable: {', '.join(sorted(files))}")
 
@@ -171,7 +167,6 @@ def main() -> None:
     args.conf, args.state_file = args.conf.resolve(), args.state_file.resolve()
     conf, state = load_conf(args.conf), read_state(args.state_file)
     while True:
-        print(f"\n[{datetime.now().astimezone().isoformat(timespec='seconds')}] checking BSC")
         try:
             check(args, conf, state)
         except (OSError, subprocess.CalledProcessError) as error:
