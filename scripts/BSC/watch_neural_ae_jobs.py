@@ -50,7 +50,7 @@ def active_jobs(ssh_login: str, user: str) -> str:
 
 
 def remote_files(ssh_transfer: str, run_dir: Path) -> set[str]:
-    names = "config.toml model.pt val_indices.json summary.json"
+    names = "config.toml model.pt val_indices.json history.json summary.json"
     remote = f"for x in {names}; do test -f {shlex.quote(str(run_dir))}/$x && echo $x; done; true"
     return set(ssh(ssh_transfer, remote, capture=True).stdout.split())
 
@@ -70,6 +70,49 @@ def original_epochs(ssh_transfer: str, run_dir: Path) -> int:
     if result <= 0:
         raise ValueError(f"Invalid epochs in {run_dir}")
     return result
+
+def completed_run_needs_continuation(
+    ssh_transfer: str, run_dir: Path, epochs: int
+) -> tuple[int, int, int] | None:
+    """Return last epoch, best epoch, and stop window for an eligible run."""
+    config_path = run_dir / "config.toml"
+    patience_command = (
+        "awk -F= '/^[[:space:]]*early_stopping_patience_epochs[[:space:]]*=/ "
+        "{ value=$2; gsub(/[[:space:]]/, \"\", value); print value; exit }' "
+        + shlex.quote(str(config_path))
+        + "; true"
+    )
+    raw_patience = ssh(ssh_transfer, patience_command, capture=True).stdout.strip()
+    patience_epochs = int(raw_patience) if raw_patience else epochs
+    stop_window = (patience_epochs + 9) // 10
+    history_code = (
+        "import json,sys; h=json.load(open(sys.argv[1])); "
+        "print(int(h[-1]['epoch'])); "
+        "print(int(min(h, key=lambda row: float(row['val_loss']))['epoch']))"
+    )
+    output = ssh(
+        ssh_transfer,
+        "python -c " + shlex.quote(history_code) + " " + shlex.quote(str(run_dir / "history.json")),
+        capture=True,
+    ).stdout.split()
+    if len(output) != 2:
+        return None
+    last_epoch, best_epoch = (int(value) for value in output)
+    if last_epoch >= epochs and best_epoch > last_epoch - stop_window:
+        return last_epoch, best_epoch, stop_window
+    return None
+
+
+def clear_completed_output_for_continuation(ssh_transfer: str, run_dir: Path, *, dry_run: bool) -> None:
+    """Keep only the artifacts required by continue_neural_ae_training.py."""
+    if dry_run:
+        return
+    command = (
+        f"find {shlex.quote(str(run_dir))} -mindepth 1 -maxdepth 1 "
+        "! -name config.toml ! -name model.pt ! -name val_indices.json "
+        "-exec rm -rf -- {} +"
+    )
+    ssh(ssh_transfer, command)
 def sync_and_submit(
     ssh_login: str, ssh_transfer: str, workspace: Path, run_dir: Path, epochs: int, dry_run: bool
 ) -> str | None:
@@ -130,6 +173,21 @@ def check(args: argparse.Namespace, conf: dict[str, str], state: dict[str, Any])
             continue
         files = remote_files(transfer, run_dir)
         if "summary.json" in files:
+            continuation = None
+            if "history.json" in files:
+                epochs = original_epochs(transfer, run_dir)
+                continuation = completed_run_needs_continuation(transfer, run_dir, epochs)
+            if continuation is not None:
+                last_epoch, best_epoch, stop_window = continuation
+                clear_completed_output_for_continuation(transfer, run_dir, dry_run=args.dry_run)
+                job_id = sync_and_submit(login, transfer, workspace, run_dir, epochs, args.dry_run)
+                if args.dry_run:
+                    print(f"[{index:02d}] would continue after epoch limit (best epoch {best_epoch}/{last_epoch})")
+                else:
+                    seen[key] = {"last_job": job_id, "epochs": epochs, "at": datetime.now(timezone.utc).isoformat()}
+                    write_state(args.state_file, state)
+                    print(f"[{index:02d}] continued after epoch limit (job {job_id}, best epoch {best_epoch}/{last_epoch})")
+                continue
             if seen.get(key, {}).get("downloaded"):
                 continue
             path = download(transfer, workspace, run_dir, args.dry_run)
