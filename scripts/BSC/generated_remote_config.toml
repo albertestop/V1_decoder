@@ -11,11 +11,11 @@ drop_last = false
 
 [custom_model]
 target = "v1tovideo.neural_autoencoder.models:TAE_v1_01_1"
-input_dim = 32
-latent_dim = 32
-latent_num_tokens = 681
-num_layers = 8
-nhead = 8
+input_dim = 16
+latent_dim = 16
+latent_num_tokens = 170
+num_layers = 2
+nhead = 2
 t_input_dropout = 0.0
 trans_dropout = 0.1
 head_dropout = 0.0
@@ -26,6 +26,7 @@ learning_rate = 0.0001
 weight_decay = 0.0001
 grad_clip_norm = 1.0
 device = "cuda:0"
+compile_model = true
 
 [train.loss]
 name = "combined"
@@ -40,4 +41,4 @@ poisson_full = false
 poisson_eps = 1e-08
 
 [output]
-dir = "/gpfs/projects/uab108/uab020077/transformer_arch/transformer_arch_24/transformer_arch/outputs/neural_autoencoder/default_run"
+dir = "/gpfs/projects/uab108/uab020077/transformer_arch/transformer_arch_59/transformer_arch/outputs/neural_autoencoder/default_run"

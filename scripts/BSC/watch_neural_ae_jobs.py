@@ -48,7 +48,7 @@ def ssh(target: str, remote: str, *, capture: bool = False) -> subprocess.Comple
 
 def active_jobs(ssh_login: str, user: str) -> str:
     # scontrol includes WorkDir, which identifies each transformer_arch_N job.
-    remote = f"for id in $(squeue -h -u {shlex.quote(user)} -o '%i'); do scontrol show job -o \"$id\"; done"
+    remote = f"for id in $(squeue -h -u {shlex.quote(user)} -o '%i'); do scontrol show job -o \"$id\" || true; done"
     return ssh(ssh_login, remote, capture=True).stdout
 
 
@@ -59,16 +59,20 @@ def remote_files(ssh_transfer: str, run_dir: Path) -> set[str]:
 
 
 def original_epochs(ssh_transfer: str, run_dir: Path) -> int:
-    # TOML is read remotely so each workspace uses its own original epoch count.
-    remote = "python -c " + shlex.quote(
-        "import sys\ntry:\n import tomllib\nexcept ModuleNotFoundError:\n import tomli as tomllib\nprint(tomllib.load(open(sys.argv[1], 'rb'))['train']['epochs'])"
-    ) + " " + shlex.quote(str(run_dir / "config.toml"))
+    # Read the run's own config without requiring tomllib/tomli on transfer1.
+    # `epochs` is a scalar in the [train] section of our experiment configs.
+    awk_program = r'''/^[[:space:]]*epochs[[:space:]]*=/ {
+        value = $2
+        sub(/[[:space:]]*#.*/, "", value)
+        gsub(/[[:space:]]/, "", value)
+        print value
+        exit
+    }'''
+    remote = "awk -F= " + shlex.quote(awk_program) + " " + shlex.quote(str(run_dir / "config.toml"))
     result = int(ssh(ssh_transfer, remote, capture=True).stdout.strip())
     if result <= 0:
         raise ValueError(f"Invalid epochs in {run_dir}")
     return result
-
-
 def sync_and_submit(ssh_login: str, ssh_transfer: str, workspace: Path, run_dir: Path, epochs: int, dry_run: bool) -> str | None:
     if dry_run:
         print(f"DRY RUN: would resume {run_dir} for {epochs} epochs")
@@ -168,7 +172,12 @@ def main() -> None:
     conf, state = load_conf(args.conf), read_state(args.state_file)
     while True:
         print(f"\n[{datetime.now().astimezone().isoformat(timespec='seconds')}] checking BSC")
-        check(args, conf, state)
+        try:
+            check(args, conf, state)
+        except (OSError, subprocess.CalledProcessError) as error:
+            # Never infer that jobs are inactive after a failed query: doing
+            # so could submit duplicates.  Retry next interval instead.
+            print(f"WARNING: BSC status check failed; no action taken: {error}")
         if args.once:
             return
         time.sleep(args.interval)
