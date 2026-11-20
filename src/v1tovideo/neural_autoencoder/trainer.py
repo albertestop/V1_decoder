@@ -37,6 +37,7 @@ class TrainConfig:
     poisson_log_input: bool = True
     poisson_full: bool = False
     poisson_eps: float = 1e-8
+    huber_delta: float = 1.0
     loss_weight_id: float = 1.0
     loss_weight_time: float = 1.0
     loss_weight_rec: float = 1.0
@@ -73,7 +74,7 @@ class AutoencoderLightningModule(pl.LightningModule):
         self.save_hyperparameters(ignore=["model"])
         self.config = config
         self._loss_name = str(config.loss_name).strip().lower()
-        supported_losses = {"masked_mse", "masked_mae", "poisson_nll", "combined"}
+        supported_losses = {"masked_mse", "masked_mae", "masked_huber", "poisson_nll", "combined"}
         if self._loss_name not in supported_losses:
             raise ValueError(f"Unsupported loss_name '{config.loss_name}'. Supported: {sorted(supported_losses)}")
         self._combined_loss_names = {
@@ -82,7 +83,7 @@ class AutoencoderLightningModule(pl.LightningModule):
             "rec": str(config.combined_loss_name_rec).strip().lower(),
         }
         supported_id_losses = {"cross_entropy"}
-        supported_value_losses = {"masked_mse", "masked_mae", "poisson_nll"}
+        supported_value_losses = {"masked_mse", "masked_mae", "masked_huber", "poisson_nll"}
         if self._combined_loss_names["id"] not in supported_id_losses:
             raise ValueError(
                 "Unsupported combined id loss "
@@ -127,6 +128,12 @@ class AutoencoderLightningModule(pl.LightningModule):
         valid = (~padding_mask).unsqueeze(-1).to(dtype=x.dtype)
         denom = valid.sum().clamp_min(1.0)
         return (torch.abs(recon - x) * valid).sum() / denom
+
+    def _masked_huber(self, recon: torch.Tensor, x: torch.Tensor, padding_mask: torch.Tensor) -> torch.Tensor:
+        valid = (~padding_mask).unsqueeze(-1).to(dtype=x.dtype)
+        denom = valid.sum().clamp_min(1.0)
+        per_element = F.huber_loss(recon, x, reduction="none", delta=float(self.config.huber_delta))
+        return (per_element * valid).sum() / denom
 
     def _masked_poisson_nll(self, recon: torch.Tensor, x: torch.Tensor, padding_mask: torch.Tensor) -> torch.Tensor:
         valid = (~padding_mask).unsqueeze(-1).to(dtype=x.dtype)
@@ -188,6 +195,8 @@ class AutoencoderLightningModule(pl.LightningModule):
             return self._masked_mse(pred_3d, target_3d, padding_mask)
         if loss_name == "masked_mae":
             return self._masked_mae(pred_3d, target_3d, padding_mask)
+        if loss_name == "masked_huber":
+            return self._masked_huber(pred_3d, target_3d, padding_mask)
         if loss_name == "poisson_nll":
             return self._masked_poisson_nll(pred_3d, target_3d, padding_mask)
         raise ValueError(f"Unsupported value loss '{loss_name}'")
@@ -221,6 +230,8 @@ class AutoencoderLightningModule(pl.LightningModule):
             return self._masked_mse(outputs["recon"], target, padding_mask), {}
         if self._loss_name == "masked_mae":
             return self._masked_mae(outputs["recon"], target, padding_mask), {}
+        if self._loss_name == "masked_huber":
+            return self._masked_huber(outputs["recon"], target, padding_mask), {}
         if self._loss_name == "poisson_nll":
             return self._masked_poisson_nll(outputs["recon"], target, padding_mask), {}
         if self._loss_name == "combined":

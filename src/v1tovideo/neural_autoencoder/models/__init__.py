@@ -8,6 +8,7 @@ from .TAE_v1_01 import TAE_v1_01
 from .TAE_v1_01_1 import TAE_v1_01_1
 from .TAE_v1_01_2 import TAE_v1_01_2
 from .TAE_v1_01_3 import TAE_v1_01_3
+from .TAE_v1_01_4 import TAE_v1_01_4
 from .TAE_v1_02_1 import TAE_v1_02_1
 from .TAE_v1_03 import TAE_v1_03
 from .TAE_v1_1 import TAE_v1_1
@@ -30,6 +31,7 @@ __all__ = [
     "TAE_v1_01_1",
     "TAE_v1_01_2",
     "TAE_v1_01_3",
+    "TAE_v1_01_4",
     "TAE_v1_02",
     "TAE_v1_02_1",
     "TAE_v1_03",

@@ -12,7 +12,7 @@ pin_memory = true
 drop_last = false
 
 [custom_model]
-target = "v1tovideo.neural_autoencoder.models:TAE_v1_01_3"
+target = "v1tovideo.neural_autoencoder.models:TAE_v1_01_4"
 input_dim = 64
 latent_dim = 64
 latent_num_tokens = 64
@@ -33,7 +33,7 @@ device = "cuda:1"
 compile_model = true
 
 [train.loss]
-# Supported: "masked_mse", "masked_mae", "poisson_nll", "combined"
+# Supported: "masked_mse", "masked_mae", "masked_huber", "poisson_nll", "combined"
 name = "combined"
 # Combined options (used only when name = "combined")
 weight_id = 0.1
@@ -41,13 +41,15 @@ weight_time = 10.0
 weight_rec = 10.0
 # id supports: "cross_entropy"
 name_id = "cross_entropy"
-# time/rec support: "masked_mse", "masked_mae", "poisson_nll"
+# time/rec support: "masked_mse", "masked_mae", "masked_huber", "poisson_nll"
 name_time = "masked_mse"
 name_rec = "masked_mse"
 # PoissonNLLLoss options (used only when name = "poisson_nll")
 poisson_log_input = true
 poisson_full = false
 poisson_eps = 1e-8
+# Huber option (used only when name, name_time, or name_rec = "masked_huber")
+huber_delta = 0.3
 
 [output]
 dir = "outputs/neural_autoencoder/default_run"
