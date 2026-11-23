@@ -7,7 +7,7 @@ import numpy as np
 
 class TAE_v2(nn.Module):
     """
-    
+
     Initial projection back to a simple sum.
     Token uncompression done by:
     Multihead attention where q = random parameters,
@@ -19,7 +19,7 @@ class TAE_v2(nn.Module):
         self,
         token_dim: int,
         latent_dim: int,
-        input_dim: int,
+        hidden_dim: int,
         latent_num_tokens: int,
         nhead: int = 4,
         num_layers: int = 2,
@@ -29,52 +29,52 @@ class TAE_v2(nn.Module):
         self.token_dim = int(token_dim)
         self.num_tokens = int(num_tokens) if num_tokens is not None else None
         self.latent_dim = int(latent_dim)
-        self.input_dim = int(input_dim)
+        self.hidden_dim = int(hidden_dim)
         self.latent_num_tokens = int(latent_num_tokens)
 
         self._last_num_tokens: int | None = None
 
-        self.id_embedding = nn.Embedding(num_tokens, input_dim)
-        self.time_proj = nn.Linear(1, input_dim)
-        self.rec_proj = nn.Linear(1, input_dim)
+        self.id_embedding = nn.Embedding(num_tokens, hidden_dim)
+        self.time_proj = nn.Linear(1, hidden_dim)
+        self.rec_proj = nn.Linear(1, hidden_dim)
 
         self.fusion_proj = nn.Sequential(
-            nn.LayerNorm(3 * input_dim),
-            nn.Linear(3 * input_dim, input_dim),
+            nn.LayerNorm(3 * hidden_dim),
+            nn.Linear(3 * hidden_dim, hidden_dim),
             nn.GELU(),
-            nn.Linear(input_dim, input_dim),
+            nn.Linear(hidden_dim, hidden_dim),
         )
 
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=input_dim,
+            d_model=hidden_dim,
             nhead=nhead,
             batch_first=True,
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
         self.to_latent = nn.Sequential(
-            nn.LayerNorm(input_dim),
-            nn.Linear(input_dim, latent_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, latent_dim),
         )
         self.from_latent = nn.Sequential(
-            nn.Linear(latent_dim, input_dim),
+            nn.Linear(latent_dim, hidden_dim),
             nn.GELU(),
-            nn.Linear(input_dim, input_dim),
+            nn.Linear(hidden_dim, hidden_dim),
         )
 
         self.token_queries = nn.Parameter(torch.randn(1, num_tokens, latent_dim))
         self.token_uncompress = nn.MultiheadAttention(latent_dim, nhead, batch_first=True)
 
         decoder_layer = nn.TransformerEncoderLayer(
-            d_model=input_dim,
+            d_model=hidden_dim,
             nhead=nhead,
             batch_first=True
         )
         self.decoder = nn.TransformerEncoder(decoder_layer, num_layers=num_layers)
 
-        self.id_head = nn.Linear(input_dim, num_tokens)
-        self.time_head = nn.Linear(input_dim, 1)       
-        self.rec_head = nn.Linear(input_dim, 1)        
+        self.id_head = nn.Linear(hidden_dim, num_tokens)
+        self.time_head = nn.Linear(hidden_dim, 1)
+        self.rec_head = nn.Linear(hidden_dim, 1)
 
     def encode_sc(self, x, padding_mask):
         if x.ndim != 3:
@@ -88,7 +88,7 @@ class TAE_v2(nn.Module):
 
         if padding_mask is None:
             raise ValueError(f"Got None for padding_mask")
-            
+
     def encode(self, x: torch.Tensor, padding_mask: torch.Tensor | None = None) -> torch.Tensor:
         self.encode_sc(x, padding_mask)
 
@@ -105,13 +105,13 @@ class TAE_v2(nn.Module):
 
         x = torch.cat([id_emb, t_proj, rec_proj], dim=-1)
         x = self.fusion_proj(x)
-        
+
         x = self.encoder(x, src_key_padding_mask=padding_mask)
 
         z = self.to_latent(x)
 
         z = z[:, :self.latent_num_tokens, :]
-        
+
         return z
 
     def decode(
@@ -122,8 +122,8 @@ class TAE_v2(nn.Module):
 
         q = self.token_queries.expand(z.size(0), -1, -1)   # [B, N, latent_dim]
         z_full, _ = self.token_uncompress(query=q, key=z, value=z)    # [B, N, latent_dim]
-        
-        x = self.from_latent(z_full)  
+
+        x = self.from_latent(z_full)
 
         x = self.decoder(x, src_key_padding_mask=padding_mask)
 

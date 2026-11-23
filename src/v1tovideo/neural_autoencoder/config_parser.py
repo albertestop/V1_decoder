@@ -51,6 +51,12 @@ def parse_neural_ae_experiment_config(config_path: Path) -> ExperimentConfig:
     model_target_raw = custom_model_cfg.get("target")
     model_target = str(model_target_raw).strip() if model_target_raw is not None else None
     model_kwargs = {k: v for k, v in custom_model_cfg.items() if k != "target"}
+    if "input_dim" in model_kwargs:
+        if "hidden_dim" in model_kwargs:
+            raise ValueError(
+                "Config [custom_model] must define only hidden_dim; input_dim is a legacy name."
+            )
+        model_kwargs["hidden_dim"] = model_kwargs.pop("input_dim")
 
     if not model_target:
         raise ValueError("custom_model.target is required")

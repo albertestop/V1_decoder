@@ -7,21 +7,21 @@ import numpy as np
 
 class TAE_v1_2(nn.Module):
     """
-    
-    We compress the token number. 
-    We add them back by generating random parameter array, 
+
+    We compress the token number.
+    We add them back by generating random parameter array,
     transforming it with a mulithead attention layer,
     which takes as q=parameters, key=z, value=z.
     We transform it again with transformer layers, and finally
     concatenating them with the original array.
-    
+
     """
 
     def __init__(
         self,
         token_dim: int,
         latent_dim: int,
-        input_dim: int,
+        hidden_dim: int,
         latent_num_tokens: int,
         nhead: int = 4,
         num_layers: int = 2,
@@ -31,37 +31,37 @@ class TAE_v1_2(nn.Module):
         self.token_dim = int(token_dim)
         self.num_tokens = int(num_tokens) if num_tokens is not None else None
         self.latent_dim = int(latent_dim)
-        self.input_dim = int(input_dim)
+        self.hidden_dim = int(hidden_dim)
         self.latent_num_tokens = int(latent_num_tokens)
 
         self._last_num_tokens: int | None = None
 
-        self.id_embedding = nn.Embedding(num_tokens, input_dim)
-        self.time_proj = nn.Linear(1, input_dim)
-        self.rec_proj = nn.Linear(1, input_dim)
+        self.id_embedding = nn.Embedding(num_tokens, hidden_dim)
+        self.time_proj = nn.Linear(1, hidden_dim)
+        self.rec_proj = nn.Linear(1, hidden_dim)
 
         self.fusion_proj = nn.Sequential(
-            nn.LayerNorm(3 * input_dim),
-            nn.Linear(3 * input_dim, input_dim),
+            nn.LayerNorm(3 * hidden_dim),
+            nn.Linear(3 * hidden_dim, hidden_dim),
             nn.GELU(),
-            nn.Linear(input_dim, input_dim),
+            nn.Linear(hidden_dim, hidden_dim),
         )
 
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=input_dim,
+            d_model=hidden_dim,
             nhead=nhead,
             batch_first=True,
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
         self.to_latent = nn.Sequential(
-            nn.LayerNorm(input_dim),
-            nn.Linear(input_dim, latent_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, latent_dim),
         )
         self.from_latent = nn.Sequential(
-            nn.Linear(latent_dim, input_dim),
+            nn.Linear(latent_dim, hidden_dim),
             nn.GELU(),
-            nn.Linear(input_dim, input_dim),
+            nn.Linear(hidden_dim, hidden_dim),
         )
 
         self.readd_tokens = nn.Parameter(torch.randn(1, self.num_tokens - self.latent_num_tokens, self.latent_dim) * 0.02)
@@ -75,15 +75,15 @@ class TAE_v1_2(nn.Module):
         self.readd_transform = nn.TransformerEncoder(readdition_layer, num_layers=num_layers)
 
         decoder_layer = nn.TransformerEncoderLayer(
-            d_model=input_dim,
+            d_model=hidden_dim,
             nhead=nhead,
             batch_first=True
         )
         self.decoder = nn.TransformerEncoder(decoder_layer, num_layers=num_layers)
 
-        self.id_head = nn.Linear(input_dim, num_tokens)
-        self.time_head = nn.Linear(input_dim, 1)
-        self.rec_head = nn.Linear(input_dim, 1)
+        self.id_head = nn.Linear(hidden_dim, num_tokens)
+        self.time_head = nn.Linear(hidden_dim, 1)
+        self.rec_head = nn.Linear(hidden_dim, 1)
 
     def encode_sc(self, x, padding_mask):
         if x.ndim != 3:

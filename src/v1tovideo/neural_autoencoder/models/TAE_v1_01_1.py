@@ -12,8 +12,8 @@ class TAE_v1_01_1(nn.Module):
         -> neuron order is shuffled in a fixed random order
         -> slice last n neurons
         -> output is in a fixed random order
-        We compress the token n. 
-        We add them back by generating random parameter array, 
+        We compress the token n.
+        We add them back by generating random parameter array,
         transforming it with some transformer layers, and finally
         concatenating them with the original array.
 
@@ -23,7 +23,7 @@ class TAE_v1_01_1(nn.Module):
         self,
         token_dim: int,
         latent_dim: int,
-        input_dim: int,
+        hidden_dim: int,
         latent_num_tokens: int,
         nhead: int = 4,
         num_layers: int = 2,
@@ -37,7 +37,7 @@ class TAE_v1_01_1(nn.Module):
         self.token_dim = int(token_dim)
         self.num_tokens = int(num_tokens) if num_tokens is not None else None
         self.latent_dim = int(latent_dim)
-        self.input_dim = int(input_dim)
+        self.hidden_dim = int(hidden_dim)
         self.latent_num_tokens = int(latent_num_tokens)
 
         self._last_num_tokens: int | None = None
@@ -45,18 +45,18 @@ class TAE_v1_01_1(nn.Module):
         self.register_buffer("perm", perm)
         self.register_buffer("keep", perm[:self.latent_num_tokens].clone())
 
-        self.id_embedding = nn.Embedding(num_tokens, input_dim)
-        self.time_proj = nn.Linear(1, input_dim)
-        self.rec_proj = nn.Linear(1, input_dim)
+        self.id_embedding = nn.Embedding(num_tokens, hidden_dim)
+        self.time_proj = nn.Linear(1, hidden_dim)
+        self.rec_proj = nn.Linear(1, hidden_dim)
 
         self.time_input_dropout = nn.Dropout(p=t_input_dropout)
         self.fusion_proj = nn.Sequential(
-            nn.LayerNorm(3 * input_dim),
-            nn.Linear(3 * input_dim, input_dim),
+            nn.LayerNorm(3 * hidden_dim),
+            nn.Linear(3 * hidden_dim, hidden_dim),
         )
 
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=input_dim,
+            d_model=hidden_dim,
             nhead=nhead,
             batch_first=True,
             dropout=trans_dropout,
@@ -68,13 +68,13 @@ class TAE_v1_01_1(nn.Module):
         )
 
         self.to_latent = nn.Sequential(
-            nn.LayerNorm(input_dim),
-            nn.Linear(input_dim, latent_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, latent_dim),
         )
         self.from_latent = nn.Sequential(
-            nn.Linear(latent_dim, input_dim),
+            nn.Linear(latent_dim, hidden_dim),
             nn.GELU(),
-            nn.Linear(input_dim, input_dim),
+            nn.Linear(hidden_dim, hidden_dim),
         )
 
         self.readd_tokens = nn.Parameter(torch.randn(1, self.num_tokens - self.latent_num_tokens, self.latent_dim) * 0.02)
@@ -92,7 +92,7 @@ class TAE_v1_01_1(nn.Module):
         )
 
         decoder_layer = nn.TransformerEncoderLayer(
-            d_model=input_dim,
+            d_model=hidden_dim,
             nhead=nhead,
             batch_first=True,
             dropout=trans_dropout,
@@ -105,9 +105,9 @@ class TAE_v1_01_1(nn.Module):
 
         self.head_dropout = nn.Dropout(head_dropout)
 
-        self.id_head = nn.Linear(input_dim, num_tokens)
-        self.time_head = nn.Linear(input_dim, 1)       
-        self.rec_head = nn.Linear(input_dim, 1)        
+        self.id_head = nn.Linear(hidden_dim, num_tokens)
+        self.time_head = nn.Linear(hidden_dim, 1)
+        self.rec_head = nn.Linear(hidden_dim, 1)
 
     def encode_sc(self, x, padding_mask):
         if x.ndim != 3:
@@ -121,7 +121,7 @@ class TAE_v1_01_1(nn.Module):
 
         if padding_mask is None:
             raise ValueError(f"Got None for padding_mask")
-            
+
     def encode(self, x: torch.Tensor, padding_mask: torch.Tensor | None = None) -> torch.Tensor:
         self.encode_sc(x, padding_mask)
         perm = self.perm.unsqueeze(0).expand(x.shape[0], -1)

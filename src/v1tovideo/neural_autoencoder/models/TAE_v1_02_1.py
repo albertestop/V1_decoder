@@ -9,11 +9,11 @@ class TAE_v1_02_1(nn.Module):
     """
 
         Like TAE_v1 but:
-        -> input with og dataset, without changing neuron order 
+        -> input with og dataset, without changing neuron order
         -> remove certain random neurons (based on their id)
         -> read tokens in the place of the removed neurons
-        We compress the token n. 
-        We add them back by generating random parameter array, 
+        We compress the token n.
+        We add them back by generating random parameter array,
         transforming it with some transformer layers, and finally
         concatenating them with the original array.
 
@@ -23,7 +23,7 @@ class TAE_v1_02_1(nn.Module):
         self,
         token_dim: int,
         latent_dim: int,
-        input_dim: int,
+        hidden_dim: int,
         latent_num_tokens: int,
         nhead: int = 4,
         num_layers: int = 2,
@@ -34,7 +34,7 @@ class TAE_v1_02_1(nn.Module):
         self.token_dim = int(token_dim)
         self.num_tokens = int(num_tokens) if num_tokens is not None else None
         self.latent_dim = int(latent_dim)
-        self.input_dim = int(input_dim)
+        self.hidden_dim = int(hidden_dim)
         self.latent_num_tokens = int(latent_num_tokens)
 
         self._last_num_tokens: int | None = None
@@ -43,30 +43,30 @@ class TAE_v1_02_1(nn.Module):
         keep = torch.rand(self.num_tokens).topk(self.latent_num_tokens).indices
         self.register_buffer("keep", keep.sort().values)
 
-        self.id_embedding = nn.Embedding(num_tokens, input_dim)
-        self.time_proj = nn.Linear(1, input_dim)
-        self.rec_proj = nn.Linear(1, input_dim)
+        self.id_embedding = nn.Embedding(num_tokens, hidden_dim)
+        self.time_proj = nn.Linear(1, hidden_dim)
+        self.rec_proj = nn.Linear(1, hidden_dim)
 
         self.fusion_proj = nn.Sequential(
-            nn.LayerNorm(3 * input_dim),
-            nn.Linear(3 * input_dim, input_dim),
+            nn.LayerNorm(3 * hidden_dim),
+            nn.Linear(3 * hidden_dim, hidden_dim),
         )
 
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=input_dim,
+            d_model=hidden_dim,
             nhead=nhead,
             batch_first=True,
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
         self.to_latent = nn.Sequential(
-            nn.LayerNorm(input_dim),
-            nn.Linear(input_dim, latent_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, latent_dim),
         )
         self.from_latent = nn.Sequential(
-            nn.Linear(latent_dim, input_dim),
+            nn.Linear(latent_dim, hidden_dim),
             nn.GELU(),
-            nn.Linear(input_dim, input_dim),
+            nn.Linear(hidden_dim, hidden_dim),
         )
 
         self.readd_tokens = nn.Parameter(torch.randn(1, self.num_tokens - self.latent_num_tokens, self.latent_dim) * 0.02)
@@ -79,15 +79,15 @@ class TAE_v1_02_1(nn.Module):
         self.readd_transform = nn.TransformerEncoder(readdition_layer, num_layers=num_layers)
 
         decoder_layer = nn.TransformerEncoderLayer(
-            d_model=input_dim,
+            d_model=hidden_dim,
             nhead=nhead,
             batch_first=True
         )
         self.decoder = nn.TransformerEncoder(decoder_layer, num_layers=num_layers)
 
-        self.id_head = nn.Linear(input_dim, num_tokens)
-        self.time_head = nn.Linear(input_dim, 1)       
-        self.rec_head = nn.Linear(input_dim, 1)        
+        self.id_head = nn.Linear(hidden_dim, num_tokens)
+        self.time_head = nn.Linear(hidden_dim, 1)
+        self.rec_head = nn.Linear(hidden_dim, 1)
 
     def encode_sc(self, x, padding_mask):
         if x.ndim != 3:
@@ -101,7 +101,7 @@ class TAE_v1_02_1(nn.Module):
 
         if padding_mask is None:
             raise ValueError(f"Got None for padding_mask")
-            
+
     def encode(self, x: torch.Tensor, padding_mask: torch.Tensor | None = None) -> torch.Tensor:
         self.encode_sc(x, padding_mask)
 

@@ -15,7 +15,7 @@ class PAE_v0(nn.Module):
         self,
         token_dim: int,
         latent_dim: int,
-        input_dim: int,
+        hidden_dim: int,
         latent_num_tokens: int,
         nhead: int = 4,
         num_layers: int = 2,
@@ -28,25 +28,25 @@ class PAE_v0(nn.Module):
         self.token_dim = int(token_dim)
         self.num_tokens = int(num_tokens)
         self.latent_dim = int(latent_dim)
-        self.input_dim = int(input_dim)
+        self.hidden_dim = int(hidden_dim)
         self.latent_num_tokens = int(latent_num_tokens)
 
         self._last_num_tokens: int | None = None
 
-        self.id_embedding = nn.Embedding(self.num_tokens, input_dim)
-        self.time_proj = nn.Linear(1, input_dim)
-        self.rec_proj = nn.Linear(1, input_dim)
+        self.id_embedding = nn.Embedding(self.num_tokens, hidden_dim)
+        self.time_proj = nn.Linear(1, hidden_dim)
+        self.rec_proj = nn.Linear(1, hidden_dim)
 
         self.fusion_proj = nn.Sequential(
-            nn.LayerNorm(3 * input_dim),
-            nn.Linear(3 * input_dim, input_dim),
+            nn.LayerNorm(3 * hidden_dim),
+            nn.Linear(3 * hidden_dim, hidden_dim),
             nn.GELU(),
-            nn.Linear(input_dim, input_dim),
+            nn.Linear(hidden_dim, hidden_dim),
         )
 
         self.input_to_latent = nn.Sequential(
-            nn.LayerNorm(input_dim),
-            nn.Linear(input_dim, latent_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, latent_dim),
         )
 
         self.latent_queries = nn.Parameter(
@@ -76,21 +76,21 @@ class PAE_v0(nn.Module):
 
         self.latent_to_input = nn.Sequential(
             nn.LayerNorm(latent_dim),
-            nn.Linear(latent_dim, input_dim),
+            nn.Linear(latent_dim, hidden_dim),
             nn.GELU(),
-            nn.Linear(input_dim, input_dim),
+            nn.Linear(hidden_dim, hidden_dim),
         )
 
         decoder_layer = nn.TransformerEncoderLayer(
-            d_model=input_dim,
+            d_model=hidden_dim,
             nhead=nhead,
             batch_first=True,
         )
         self.decoder = nn.TransformerEncoder(decoder_layer, num_layers=num_layers)
 
-        self.id_head = nn.Linear(input_dim, self.num_tokens)
-        self.time_head = nn.Linear(input_dim, 1)
-        self.rec_head = nn.Linear(input_dim, 1)
+        self.id_head = nn.Linear(hidden_dim, self.num_tokens)
+        self.time_head = nn.Linear(hidden_dim, 1)
+        self.rec_head = nn.Linear(hidden_dim, 1)
 
     def encode_sc(self, x: torch.Tensor, padding_mask: torch.Tensor | None) -> None:
         if x.ndim != 3:
