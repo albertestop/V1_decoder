@@ -12,6 +12,7 @@ class TAE_v1_02_1(nn.Module):
         -> input with og dataset, without changing neuron order
         -> remove certain random neurons (based on their id)
         -> read tokens in the place of the removed neurons
+        -> output token order expected to be = to input token order
         We compress the token n.
         We add them back by generating random parameter array,
         transforming it with some transformer layers, and finally

@@ -11,7 +11,7 @@ class TAE_v1_01_1(nn.Module):
         Like TAE_v1 but:
         -> neuron order is shuffled in a fixed random order
         -> slice last n neurons
-        -> output is in a fixed random order
+        -> output expected in a fixed random order
         We compress the token n.
         We add them back by generating random parameter array,
         transforming it with some transformer layers, and finally
@@ -124,6 +124,7 @@ class TAE_v1_01_1(nn.Module):
 
     def encode(self, x: torch.Tensor, padding_mask: torch.Tensor | None = None) -> torch.Tensor:
         self.encode_sc(x, padding_mask)
+        
         perm = self.perm.unsqueeze(0).expand(x.shape[0], -1)
         x = x.gather(1, perm.unsqueeze(-1).expand_as(x))
         padding_mask = padding_mask.gather(1, perm)
