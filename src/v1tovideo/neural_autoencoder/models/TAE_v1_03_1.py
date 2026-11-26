@@ -25,6 +25,9 @@ class TAE_v1_03_1(nn.Module):
         nhead: int = 4,
         num_layers: int = 2,
         num_tokens: int | None = None,
+        t_input_dropout: float = 0.0,
+        trans_dropout: float = 0.1,
+        head_dropout: float = 0.0,
     ) -> None:
         super().__init__()
         self.outputs = ['logit', 'value', 'value']

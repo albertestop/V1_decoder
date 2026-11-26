@@ -12,10 +12,10 @@ pin_memory = true
 drop_last = false
 
 [custom_model]
-target = "v1tovideo.neural_autoencoder.models:TAE_v1_01_1"
+target = "v1tovideo.neural_autoencoder.models:TAE_v1_03_1"
 hidden_dim = 64
-latent_dim = 32
-latent_num_tokens = 64
+latent_dim = 16
+latent_num_tokens = 128
 num_layers = 4
 nhead = 4
 t_input_dropout = 0.0
