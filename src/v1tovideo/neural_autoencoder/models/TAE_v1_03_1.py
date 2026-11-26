@@ -44,6 +44,7 @@ class TAE_v1_03_1(nn.Module):
         self.time_proj = nn.Linear(1, hidden_dim)
         self.rec_proj = nn.Linear(1, hidden_dim)
 
+        self.time_input_dropout = nn.Dropout(p=t_input_dropout)
         self.fusion_proj = nn.Sequential(
             nn.LayerNorm(3 * hidden_dim),
             nn.Linear(3 * hidden_dim, hidden_dim),
@@ -53,8 +54,13 @@ class TAE_v1_03_1(nn.Module):
             d_model=hidden_dim,
             nhead=nhead,
             batch_first=True,
+            dropout=trans_dropout,
         )
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.encoder = nn.TransformerEncoder(
+            encoder_layer,
+            num_layers=num_layers,
+            enable_nested_tensor=False,
+        )
 
         self.to_latent = nn.Sequential(
             nn.LayerNorm(hidden_dim),
@@ -72,15 +78,27 @@ class TAE_v1_03_1(nn.Module):
             d_model=latent_dim,
             nhead=nhead,
             batch_first=True,
+            dropout=trans_dropout,
         )
-        self.readd_transform = nn.TransformerEncoder(readdition_layer, num_layers=num_layers)
+        self.readd_transform = nn.TransformerEncoder(
+            readdition_layer,
+            num_layers=num_layers,
+            enable_nested_tensor=False,
+        )
 
         decoder_layer = nn.TransformerEncoderLayer(
             d_model=hidden_dim,
             nhead=nhead,
-            batch_first=True
+            batch_first=True,
+            dropout=trans_dropout,
         )
-        self.decoder = nn.TransformerEncoder(decoder_layer, num_layers=num_layers)
+        self.decoder = nn.TransformerEncoder(
+            decoder_layer,
+            num_layers=num_layers,
+            enable_nested_tensor=False,
+        )
+
+        self.head_dropout = nn.Dropout(head_dropout)
 
         self.id_head = nn.Linear(hidden_dim, num_tokens)
         self.time_head = nn.Linear(hidden_dim, 1)
@@ -136,14 +154,12 @@ class TAE_v1_03_1(nn.Module):
 
         readdition_init = self.readd_tokens.expand(z.shape[0], -1, -1)
         readdition = self.readd_transform(readdition_init).to(dtype=z.dtype)
-
         x = torch.concatenate([z, readdition], axis=1)
 
         x = self.from_latent(x)
 
-        if self._last_padding_mask is None:
-            raise ValueError("decode requires encode to be called first")
         x = self.decoder(x, src_key_padding_mask=self._last_padding_mask)
+
 
         id_logits = self.id_head(x)         # classification over IDs
         time_pred = self.time_head(x)       # regression
